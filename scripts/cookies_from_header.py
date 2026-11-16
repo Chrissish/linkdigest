@@ -122,9 +122,10 @@ def main() -> int:
 
     out.write_text(to_netscape(pairs, kept), encoding="utf-8")
 
+    from linkdigest.config import load
     from linkdigest.net.cookies import summary as cookies_summary
 
-    info = cookies_summary(out)
+    info = cookies_summary(load(), out)
     print(f"写入 {len(pairs)} 个 cookie（保留其他站点 {len(kept)} 条）→ {out}")
     print(f"含登录态：{'是' if info.get('logged_in') else '否'}")
     if info.get("auth_names"):
@@ -140,12 +141,14 @@ def main() -> int:
         print("\n✅ 已写入。cookies 每次采集现读，直接重试链接即可，不用重启服务。")
         return 0
 
+    from linkdigest.config import load
     from linkdigest.net.cookies import login_state
     from linkdigest.net.probe import reachability
 
+    cfg = load()
     print("\n联网校验（拿这份 cookies 打一次 youtube.com 看服务端认不认）…")
-    reachability("https://www.youtube.com/", timeout=8.0)
-    state = login_state()
+    reachability(cfg, "https://www.youtube.com/", timeout=8.0)
+    state = login_state(cfg)
     if state.get("error"):
         print(f"校验没做成：{state['error']}")
         print("（不影响写入结果，直接重试链接即可）")

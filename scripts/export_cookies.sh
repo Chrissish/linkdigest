@@ -116,9 +116,11 @@ echo
 echo "[2/3] 校验 ${OUT} 是否含登录态"
 "${PY}" - <<'PY'
 import json
+
+from linkdigest.config import load
 from linkdigest.net.cookies import summary as cookies_summary
 
-info = cookies_summary()
+info = cookies_summary(load())
 print(json.dumps(info, ensure_ascii=False, indent=2))
 if info.get("logged_in"):
     print("\n✅ 含登录 Cookie。")

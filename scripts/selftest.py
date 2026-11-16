@@ -14,8 +14,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
+from linkdigest.app import service as app_service  # noqa: E402
 from linkdigest.capabilities.speech import ASRSegment, normalize_language  # noqa: E402
 from linkdigest.clean import clean_text, normalize_segments, text_to_segments  # noqa: E402
+from linkdigest.config import Settings, load  # noqa: E402
 from linkdigest.contracts.builder import build_bundle  # noqa: E402
 from linkdigest.contracts.models import SourceMeta  # noqa: E402
 from linkdigest.contracts.validation import validate_bundle  # noqa: E402
@@ -26,12 +28,14 @@ from linkdigest.handoff import BRIEF, apply_answer, export_handoff  # noqa: E402
 from linkdigest.ingest.normalize import normalize_input  # noqa: E402
 from linkdigest.jobs.db import Store  # noqa: E402
 from linkdigest.jobs.finalize import finalize  # noqa: E402
-from linkdigest.jobs.layout import job_dir, job_path  # noqa: E402
 from linkdigest.net.errors import explain_error  # noqa: E402
 from linkdigest.render.html import seek_url  # noqa: E402
 from linkdigest.render.markdown import render_markdown  # noqa: E402
 from linkdigest.understand.degraded import degraded_report  # noqa: E402
 from linkdigest.understand.payload import report_from_payload  # noqa: E402
+
+# 整个自检共用这一份配置；需要落盘的分支再 model_copy 换 data_dir
+cfg = load()
 
 FAILED: list[str] = []
 
@@ -53,7 +57,7 @@ def check_true(name: str, cond: bool, detail: str = "") -> None:
 
 
 def norm(*items: tuple[float, float, str]):
-    return normalize_segments([ASRSegment(s, e, t) for s, e, t in items])
+    return normalize_segments(cfg, [ASRSegment(s, e, t) for s, e, t in items])
 
 
 print("[clean_text]")
@@ -93,7 +97,7 @@ check_true("碎句被拼接", result.segments[-1]["text"].endswith("接着往上
 
 print("[text_to_segments]")
 long_para = "".join(f"第{i}个要点说明了一些有差异的内容。" for i in range(1, 41))
-result = text_to_segments(long_para)
+result = text_to_segments(cfg, long_para)
 check_true("长段被切句", len(result.segments) > 3, f"segments={len(result.segments)}")
 check_true("段落锚点标记", all("para_index" in s["flags"] for s in result.segments))
 
@@ -178,15 +182,15 @@ except ValueError:
 print("[errors]")
 check_true(
     "代理 502 归因到网络",
-    "代理" in explain_error("Tunnel connection failed: 502 Bad Gateway", "https://www.youtube.com/watch?v=x"),
+    "代理" in explain_error("Tunnel connection failed: 502 Bad Gateway", "https://www.youtube.com/watch?v=x", cfg),
 )
 check_true(
     "机器人校验归因到 cookies",
-    "cookies" in explain_error("Sign in to confirm you're not a bot", "https://www.youtube.com/watch?v=x"),
+    "cookies" in explain_error("Sign in to confirm you're not a bot", "https://www.youtube.com/watch?v=x", cfg),
 )
 check_true(
     "已删除内容有话说",
-    "不可用" in explain_error("ERROR: Video unavailable", "https://www.youtube.com/watch?v=x"),
+    "不可用" in explain_error("ERROR: Video unavailable", "https://www.youtube.com/watch?v=x", cfg),
 )
 
 print("[naming]")
@@ -204,7 +208,6 @@ check("未知码交给检测", normalize_language("klingon"), None)
 
 print("[config + paths]")
 from linkdigest import __version__  # noqa: E402
-from linkdigest.config import settings  # noqa: E402
 from linkdigest.config.env import (  # noqa: E402
     PROJECT_ROOT,
     env_float,
@@ -213,7 +216,6 @@ from linkdigest.config.env import (  # noqa: E402
     resolve_path,
     user_data_dir,
 )
-from linkdigest.config.settings import Settings  # noqa: E402
 
 check_true(
     "源码树能认出仓库根",
@@ -240,15 +242,72 @@ del os.environ["LINK_DIGEST_SELFTEST_INT"]
 del os.environ["LINK_DIGEST_SELFTEST_FLOAT"]
 
 os.environ["COOKIES_FILE"] = "/tmp/ck-probe.txt"
-check("COOKIES_FILE 收进 Settings", Settings().cookies_file, Path("/tmp/ck-probe.txt").resolve())
+# 模型本身不读环境，映射发生在 load()——这才让 Settings 可以纯粹按参数构造
+check("COOKIES_FILE 收进 Settings", load().cookies_file, Path("/tmp/ck-probe.txt").resolve())
 del os.environ["COOKIES_FILE"]
-check("版本号只有一处定义", settings.pipeline_version, __version__)
-check("默认 ASR 模型与示例一致", Settings().asr_model, "small")
+check("版本号只有一处定义", cfg.pipeline_version, __version__)
+check("默认 ASR 模型与示例一致", Settings(data_dir=anchor).asr_model, "small")
+
+print("[config model + override]")
+from linkdigest.config import override as config_override  # noqa: E402
+
+
+def raises(fn) -> bool:
+    try:
+        fn()
+    except Exception:  # noqa: BLE001 - 这里只关心「有没有拦住」
+        return True
+    return False
+
+
+base = Settings(data_dir=anchor, llm_api_key="sk-probe")
+check_true("配置不可变（frozen）", raises(lambda: setattr(base, "asr_model", "x")))
+check_true("越界温度被拒", raises(lambda: Settings(data_dir=anchor, llm_temperature=9)))
+
+
+def error_text(fn) -> str:
+    try:
+        fn()
+    except Exception as exc:  # noqa: BLE001 - 只取文案
+        return str(exc)
+    return ""
+
+
+check_true(
+    "越界报错说中文且带下限",
+    "不能小于 60" in error_text(lambda: config_override.apply(base, ["asr.max_seconds=10"])),
+    error_text(lambda: config_override.apply(base, ["asr.max_seconds=10"])),
+)
+check_true("非法 base_url 被拒", raises(lambda: Settings(data_dir=anchor, llm_base_url="api.openai.com")))
+
+overridden = config_override.apply(base, ["asr.model=large-v3"])
+check("覆盖生效", overridden.asr_model, "large-v3")
+check("原对象不受影响", base.asr_model, "small")
+check("环境变量名也能当键", config_override.apply(base, ["ASR_MODEL=medium"]).asr_model, "medium")
+check_true("非白名单键被拒", raises(lambda: config_override.apply(base, ["data_dir=/tmp/x"])))
+check("清空密钥即降级", config_override.apply(base, ["llm.api_key="]).llm_ready, False)
+check("快照给密钥打码", base.snapshot()["llm_api_key"], "***")
+check_true("快照不含明文密钥", "sk-probe" not in json.dumps(base.snapshot(), ensure_ascii=False))
+
+# 白名单、环境变量别名、模型字段三者必须对得上：写错键名不会抛异常，只会静默失效
+fields = set(Settings.model_fields)
+mapped = {field for field, _ in config_override._FIELDS.values()}
+check_true("覆盖键都指向真实字段", mapped <= fields, sorted(mapped - fields))
+check_true(
+    "每个可覆盖键都有环境变量名",
+    set(config_override._FIELDS) <= set(config_override._ENV_ALIASES.values()),
+    sorted(set(config_override._FIELDS) - set(config_override._ENV_ALIASES.values())),
+)
+env_example = (PROJECT_ROOT / ".env.example") if PROJECT_ROOT else None
+if env_example and env_example.exists():
+    documented = env_example.read_text(encoding="utf-8")
+    undocumented = [key for key in config_override._ENV_ALIASES if key not in documented]
+    check_true("可覆盖项都在 .env.example 里", not undocumented, undocumented)
 
 print("[jobs + handoff]")
-settings.data_dir = Path(tempfile.mkdtemp(prefix="linkdigest-selftest-"))
-store = Store()
-job = store.create_job("https://www.youtube.com/watch?v=abcdefghijk", "url")
+cfg = cfg.model_copy(update={"data_dir": Path(tempfile.mkdtemp(prefix="linkdigest-selftest-"))})
+store = Store(cfg)
+job = app_service.create_job(store, "https://www.youtube.com/watch?v=abcdefghijk")
 store.update(
     job.id,
     title="How to Recover After a 100k Ultra",
@@ -262,13 +321,15 @@ directory = finalize(store, job.id)
 check_true("目录名以 _job_id 结尾", directory.name.endswith("_" + job.id), directory.name)
 check_true("目录名带时间前缀", re.match(r"^\d{8}-\d{4}_", directory.name) is not None, directory.name)
 check_true("目录名带标题", "How-to-Recover" in directory.name, directory.name)
-check_true("job_dir 能反查回可读目录", job_dir(job.id) == directory, str(job_dir(job.id)))
+check_true("job_dir 能反查回可读目录", store.job_dir(job.id) == directory, str(store.job_dir(job.id)))
+check("store 绑定目录解析", store.job_path(job.id, "x"), directory / "x")
 check_true("manifest 落盘", (directory / "manifest.json").exists())
-check_true("索引落盘", (settings.jobs_dir / "INDEX.md").exists())
+check_true("配置快照随任务落盘", (directory / "config.json").exists())
+check_true("索引落盘", (store.jobs_dir / "INDEX.md").exists())
 check("前缀能定位任务", store.resolve(job.id[:6]).id if store.resolve(job.id[:6]) else None, job.id)
 
-write_json(job_path(job.id, "transcript.json"), payload)
-answer_path = export_handoff(job.id, bundle)
+write_json(store.job_path(job.id, "transcript.json"), payload)
+answer_path = export_handoff(store, job.id, bundle)
 brief = (directory / BRIEF).read_text(encoding="utf-8")
 check_true("交接包 BRIEF 存在", answer_path.parent.joinpath("BRIEF.md").exists(), str(answer_path))
 check_true("BRIEF 含必填契约", '"one_liner"' in brief and '"body"' in brief and '"intent"' in brief)
@@ -282,13 +343,13 @@ check_true("BRIEF 含应用命令", "--apply" in brief)
 check_true("纯文本稿落盘", (directory / "handoff/transcript.md").exists())
 
 try:
-    apply_answer(job.id, {"tldr": []}, store)
+    apply_answer(store, job.id, {"tldr": []})
     check_true("空答案被拒", False)
 except ValueError:
     check_true("空答案被拒", True, "")
 
 try:
-    apply_answer(job.id, {"body": "只有自由正文，没有一句话摘要，也应当被接受。"}, store)
+    apply_answer(store, job.id, {"body": "只有自由正文，没有一句话摘要，也应当被接受。"})
     check_true("只给 body 也能应用", True)
 except ValueError as exc:
     check_true("只给 body 也能应用", False, str(exc))
@@ -304,11 +365,11 @@ answer = {
     "quotes": [{"text": "第一段内容，用来验证契约。", "start": "00:00", "note": "原话"}],
     "appendix": "### 轮次对照\n\n| 轮次 | 结论 |\n| --- | --- |\n| 一 | 通过 |",
 }
-apply_answer(job.id, answer, store)
+apply_answer(store, job.id, answer)
 final = store.get(job.id)
 check("应用后降级标记清除", final.degraded, False)
 check("应用后记录来源", final.llm_model, "external-agent")
-markdown_text = job_path(job.id, "report.md").read_text(encoding="utf-8")
+markdown_text = store.job_path(job.id, "report.md").read_text(encoding="utf-8")
 check_true("报告已重渲染", "降级模式" not in markdown_text)
 check_true("报告含外部来源标注", "外部 agent" in markdown_text)
 check_true("intent 印在开头", "给准备复跑的人看" in markdown_text)
@@ -324,8 +385,37 @@ check_true(
 bare = render_markdown(bundle, report_from_payload({"appendix": "| a | b |\n| --- | --- |"}))
 check_true("appendix 无标题时自动加容器", "## 补充" in bare)
 
+print("[injection]")
+from linkdigest.capabilities.llm import LLMStats  # noqa: E402
+from linkdigest.understand.chunking import chunk_bundle  # noqa: E402
+
+# 同一份数据、同一个函数，只换配置：结果必须跟着变，否则「注入」就是假的
+long_text = "".join(f"第{i}个要点说明了一些有差异的内容，用来撑满分块预算。" for i in range(1, 121))
+long_result = text_to_segments(cfg, long_text)
+for i, seg in enumerate(long_result.segments):
+    seg["idx"] = i
+long_bundle = build_bundle(
+    bundle_id="cafebabecafebabe",
+    source=source,
+    segments=long_result.segments,
+    flags=long_result.flags,
+    warnings=long_result.warnings,
+    stats=long_result.stats,
+    language="zh",
+    language_probability=0.99,
+    asr_engine="selftest",
+    media=None,
+)
+tight = len(chunk_bundle(cfg.model_copy(update={"llm_chunk_chars": 500}), long_bundle))
+loose = len(chunk_bundle(cfg.model_copy(update={"llm_chunk_chars": 6000}), long_bundle))
+check_true("分块预算按传入配置生效", tight > loose >= 1, f"500字→{tight} 块 / 6000字→{loose} 块")
+
+stats = LLMStats(price_in=1.0, price_out=2.0)
+stats.prompt_tokens, stats.completion_tokens = 1_000_000, 500_000
+check("成本按注入单价算", stats.cost_usd, 2.0)
+
 print("[render html]")
-html_text = job_path(job.id, "report.html").read_text(encoding="utf-8")
+html_text = store.job_path(job.id, "report.html").read_text(encoding="utf-8")
 check_true("html 同源落盘", '<article class="prose"' in html_text and "给准备复跑的人看" in html_text)
 check_true("html 无占位残留", "{{" not in html_text)
 check_true(
@@ -355,7 +445,7 @@ check_true("intent 收进页脚", 'class="intent-foot"' in html_text)
 check("应用后状态为完成", final.status, "done")
 check_true(
     "usage 记录外部模式",
-    json.loads(job_path(job.id, "usage.json").read_text(encoding="utf-8")).get("mode") == "external",
+    json.loads(store.job_path(job.id, "usage.json").read_text(encoding="utf-8")).get("mode") == "external",
 )
 
 print("[ingest routing]")

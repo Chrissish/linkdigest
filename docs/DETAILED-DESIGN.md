@@ -5,22 +5,22 @@
 | 层 / 模块 | 职责 | 关键函数 |
 | --- | --- | --- |
 | `conventions` | 纯工具：时间码、命名、文本度量、JSON 落盘、资源读取 | `ts()`、`parse_ts()`、`slugify()`、`read_json()` |
-| `config` | 全部可调项集中一处，环境变量驱动，构造时定值 | `Settings`、`settings.ensure_dirs()` |
+| `config` | 不可变的配置模型（校验 + 范围）、路径解析、覆盖白名单 | `Settings`、`load()`、`override.apply()` |
 | `bootstrap` | 显式副作用：代理写环境、建目录 | `bootstrap()`、`install_proxy()` |
-| `net` | 出口与传输：代理、HTTP、探活、cookies、失败归因 | `reachability()`、`stream_to()`、`explain_error()` |
-| `capabilities.ffmpeg` | 音轨抽取与时长闸门 | `to_wav(src, dst)`、`guard_duration(path)` |
-| `capabilities.speech` | ASR 端口 + 两引擎适配 | `transcribe(wav, language)`、`available_engines()` |
-| `capabilities.llm` | 理解层端口 + OpenAI 兼容传输 + 用量记账 | `LLMClient.chat_json()`、`parse_json()` |
+| `net` | 出口与传输：代理、HTTP、探活、cookies、失败归因 | `reachability(cfg, url)`、`stream_to(cfg, url, target)`、`explain_error(exc, url, cfg)` |
+| `capabilities.ffmpeg` | 音轨抽取与时长闸门 | `to_wav(cfg, src, dst)`、`guard_duration(cfg, path)` |
+| `capabilities.speech` | ASR 端口 + 两引擎适配 | `transcribe(cfg, wav, language)`、`available_engines()` |
+| `capabilities.llm` | 理解层端口 + OpenAI 兼容传输 + 用量记账 | `LLMClient(cfg).chat_json()`、`parse_json()` |
 | `capabilities.ocr` | 图文源内嵌图片（可选） | `ocr_images(paths)` |
 | `contracts` | 契约模型、构造、机械切章、校验、schema 导出 | `build_bundle(...)`、`validate_bundle(dict)` |
-| `clean` | 规则清洗、去幻觉、切段指标 | `normalize_segments(raw)`、`text_to_segments(text)` |
-| `ingest` | 链接判定与采集，归一为「音频文件 or 正文」 | `fetch(url, workdir)`、`classify(url)`、`bundle_id_for(seed)` |
-| `understand` | 分块、提示词装载、map/reduce、降级 | `build_report(bundle)`、`degraded_report(bundle)` |
-| `render` | Markdown / HTML 渲染与双形态落盘 | `render_markdown(...)`、`render_html(...)`、`save_report(...)` |
-| `handoff` | 无密钥时的交接包导出与答案回收（三层契约：必填 / 不可违反 / 可选） | `export_handoff(job_id, bundle)`、`apply_answer(job_id, payload)` |
-| `jobs` | SQLite 状态 + 可读产物路径 + 阶段日志 + 索引 + 收尾 | `Store.resolve()`、`job_dir()`、`finalize()`、`refresh_index()` |
-| `app.pipeline` | 阶段编排、进度、错误处理 | `run_job(job_id, store)` |
-| `app.service` | 用例：建任务、应用答案、补渲染、清理 | `create_job()`、`apply_external()`、`prune()` |
+| `clean` | 规则清洗、去幻觉、切段指标 | `normalize_segments(cfg, raw)`、`text_to_segments(cfg, text)` |
+| `ingest` | 链接判定与采集，归一为「音频文件 or 正文」 | `fetch(cfg, url, workdir)`、`classify(url)`、`bundle_id_for(seed)` |
+| `understand` | 分块、提示词装载、map/reduce、降级 | `chunk_bundle(cfg, bundle)`、`build_report(cfg, bundle)`、`degraded_report(bundle)` |
+| `render` | Markdown / HTML 渲染与双形态落盘 | `render_markdown(...)`、`render_html(...)`、`save_report(store, job_id, ...)` |
+| `handoff` | 无密钥时的交接包导出与答案回收（三层契约：必填 / 不可违反 / 可选） | `export_handoff(store, job_id, bundle)`、`apply_answer(store, job_id, payload)` |
+| `jobs` | SQLite 状态 + 可读产物路径 + 阶段日志 + 索引 + 收尾 | `Store(cfg)`、`store.job_dir()`、`finalize(store, job_id)`、`refresh_index(store)` |
+| `app.pipeline` | 阶段编排、进度、错误处理 | `run_job(store, job_id)` |
+| `app.service` | 用例：建任务、应用答案、补渲染、清理 | `create_job(store, url)`、`apply_external(store, ...)`、`prune(store, ...)` |
 | `api` / `cli` | 交付形态：HTTP 路由 / 终端排版 | `app`、`main()` |
 
 依赖方向单向（详见 ARCHITECTURE 的分层图）：`app → {ingest, clean, contracts, understand, render, handoff, jobs}`，
@@ -117,11 +117,12 @@ CREATE TABLE jobs (
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
-| GET | `/api/health` | ffmpeg / ASR 引擎 / 模型就绪状态，前端启动即调 |
-| POST | `/api/jobs` | `{url}` → job |
+| GET | `/api/health` | ffmpeg / ASR 引擎 / 模型就绪状态 + 配置快照，前端启动即调 |
+| POST | `/api/jobs` | `{url, config?}` → job；`config` 覆盖白名单内的键，只作用于这一个任务 |
 | POST | `/api/upload` | multipart 文件 → job（本地文件同一条管道） |
 | GET | `/api/jobs` | 历史列表 |
 | GET | `/api/jobs/{id}` | 状态 + 阶段耗时 + 产物存在标记 |
+| GET | `/api/jobs/{id}/config` | 这个任务当时实际用的配置（密钥打码） |
 | GET | `/api/jobs/{id}/report` | Markdown 渲染成 HTML |
 | GET | `/api/jobs/{id}/markdown` | 原始 Markdown |
 | GET | `/api/jobs/{id}/bundle` | 契约 JSON |
@@ -141,6 +142,18 @@ CREATE TABLE jobs (
 
 **换模型厂商**：`capabilities/llm/openai.py` 换成任何提供 `complete(payload) -> dict` 的传输类即可；
 协议不同（非 OpenAI 兼容）也只影响这一个文件。
+
+**加配置项**：四处一起改，缺一处就会出现「`.env` 里能写，命令行改不动」这种不一致。
+
+1. `config/settings.py` 的 `Settings` 加字段（带 `Field(ge/le)` 与默认值）；
+2. `config/settings.py` 的 `load()` 里加 `env("KEY", 默认值)`；
+3. `config/override.py` 的 `_FIELDS`（点号键 + 转换器）与 `_ENV_ALIASES`（环境变量名）各加一行，
+   否则 `--set` 和 HTTP `config` 会报「不支持覆盖」；
+4. `.env.example` 补注释。
+
+需要配置的下游函数把 `cfg` 作第一个参数，不要在函数里重新 `load()`——一份配置走完全程，
+才能保证 `config.json` 里记的就是这一趟真正用的值。部署类参数（数据目录、代理、外部程序路径）
+不加进 `_FIELDS`。
 
 **说话人分离**：`Segment.speaker` 字段已预留。接入点在 `clean` 之后、`build_bundle` 之前，
 输出 `list[(start, end, speaker)]` 与段做时间重叠匹配即可，契约不用改。

@@ -18,12 +18,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
+from linkdigest.config import load  # noqa: E402
 from linkdigest.contracts.models import Report, TranscriptBundle  # noqa: E402
 from linkdigest.conventions.jsonio import read_json, write_json  # noqa: E402
 from linkdigest.handoff import ANSWER, BRIEF, export_handoff  # noqa: E402
 from linkdigest.jobs.db import Store  # noqa: E402
 from linkdigest.jobs.index import refresh_index  # noqa: E402
-from linkdigest.jobs.layout import job_dir, job_path  # noqa: E402
 from linkdigest.render.save import save_report  # noqa: E402
 
 
@@ -50,7 +50,7 @@ def main() -> int:
     parser.add_argument("--limit", type=int, default=200)
     args = parser.parse_args()
 
-    store = Store()
+    store = Store(load())
     jobs = store.list(args.limit)
     if args.jobs:
         picked = []
@@ -64,8 +64,8 @@ def main() -> int:
 
     touched = 0
     for job in jobs:
-        directory = job_dir(job.id)
-        bundle_path = job_path(job.id, "transcript.json")
+        directory = store.job_dir(job.id)
+        bundle_path = store.job_path(job.id, "transcript.json")
         if not bundle_path.exists():
             continue
         bundle = TranscriptBundle.model_validate(read_json(bundle_path))
@@ -73,12 +73,12 @@ def main() -> int:
         todo: list[str] = []
 
         # 1. 作业单模板升级（已完成的任务也拉齐：它们是回归基线，不能留旧口径）
-        if args.force or _brief_stale(job_path(job.id, BRIEF)):
+        if args.force or _brief_stale(store.job_path(job.id, BRIEF)):
             todo.append("重导作业单")
 
         # 2. 答案落盘（早期走 API body 应用的任务没有 answer.json）
-        answer_path = job_path(job.id, ANSWER)
-        report_path = job_path(job.id, "report.json")
+        answer_path = store.job_path(job.id, ANSWER)
+        report_path = store.job_path(job.id, "report.json")
         if report_path.exists() and not answer_path.exists() and not job.degraded:
             todo.append("补 answer.json")
 
@@ -96,8 +96,8 @@ def main() -> int:
         if not args.write:
             continue
 
-        if args.force or _brief_stale(job_path(job.id, BRIEF)):
-            export_handoff(job.id, bundle)
+        if args.force or _brief_stale(store.job_path(job.id, BRIEF)):
+            export_handoff(store, job.id, bundle)
 
         report = Report.model_validate(read_json(report_path)) if report_path.exists() else None
 
@@ -106,14 +106,14 @@ def main() -> int:
 
         if report:
             mode = "external" if "external" in (job.llm_model or "") else "local"
-            usage_path = job_path(job.id, "usage.json")
+            usage_path = store.job_path(job.id, "usage.json")
             usage = read_json(usage_path) if usage_path.exists() else {}
-            save_report(job.id, bundle, report,
+            save_report(store, job.id, bundle, report,
                         extra={"mode": mode, "llm_stats": usage.get("llm") or {},
                                "job_id": job.id, "created_at": job.created_at})
 
     if args.write:
-        refresh_index()
+        refresh_index(store)
         print(f"\n已处理 {touched} 个任务，索引已刷新。", file=sys.stderr)
     else:
         print(f"\n预览：{touched} 个任务待处理。加 --write 执行。", file=sys.stderr)

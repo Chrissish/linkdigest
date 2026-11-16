@@ -104,7 +104,10 @@ python -m linkdigest.cli 412be41e --apply                          # 校验 → 
 
 ## 配置
 
-全部通过环境变量或 `.env` 覆盖，无配置中心。完整清单见 `.env.example`。
+配置只有一个来源：`Settings` 模型，从环境变量或 `.env` 装配，**构造后不可变**。
+入口处解析一次，之后显式传给每一层——没有进程级全局配置对象，也就没有「谁把全局改过」。
+
+### 全局配置
 
 `.env` 的查找顺序是 **当前目录 → 仓库根 → 用户配置目录**（`~/Library/Application Support/linkdigest`
 等），取第一个存在的；要指到别处就设 `LINK_DIGEST_ENV` 的绝对路径。**相对路径锚在 `.env` 所在目录**，
@@ -123,7 +126,30 @@ python -m linkdigest.cli 412be41e --apply                          # 校验 → 
 | `LINK_DIGEST_DATA` | 任务产物目录 | 源码树 `data/`，安装后用户数据目录 |
 | `LINK_DIGEST_ENV` | 指定 `.env` 的绝对路径 | 空（按上面的顺序找） |
 
-配错类型不会静默吞掉：`ASR_MAX_SECONDS=4h` 这类值会在启动时打一行提示并回落默认值。
+### 单次运行覆盖
+
+CLI 用 `--set KEY=VALUE`（可重复），HTTP 用 `POST /api/jobs` 的 `config` 字段：
+
+```bash
+python -m linkdigest.cli <url> --set asr.model=large-v3 --set llm.temperature=0.4
+curl -X POST localhost:8787/api/jobs \
+  -H 'Content-Type: application/json' \
+  -d '{"url":"...","config":{"asr.model":"large-v3"}}'
+```
+
+可覆盖 `asr.*`、`llm.*`、`fetch.timeout`、`max_download_mb`、`cookies.*`，键名写点号式或环境变量名都行。
+**数据目录、代理、外部程序路径不在白名单内**——那是部署决策，从请求里改等于把写入位置和出口交给调用方。
+`--no-llm` 等价于 `--set llm.api_key=`。
+
+每次运行都会把当次配置写进任务目录的 `config.json`（密钥打码），并抄进 `manifest.json`：
+
+```bash
+python -m linkdigest.cli <job> --config     # 看这个任务当时用的参数
+curl localhost:8787/api/jobs/<id>/config
+```
+
+类型写错（`ASR_MAX_SECONDS=4h`）会提示一行并回落默认值；数值越界（`ASR_MAX_SECONDS=10`，下限 60）
+直接报错退出，不会带着半截配置往下跑。
 
 ASR 引擎默认 `auto`：装了 `faster-whisper` 就用它，Apple Silicon 上装 `mlx-whisper` 会更快。
 OCR 与 mlx 都是可选依赖：

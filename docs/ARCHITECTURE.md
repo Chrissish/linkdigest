@@ -51,8 +51,25 @@ conventions  ←  config  ←  net  ←  capabilities  ←  contracts
 
 ## 配置与路径
 
-配置只有一个来源：`config/settings.py` 的 `Settings`，全部字段从环境变量或 `.env` 读取，
-构造时定型，运行期不重读。`config/` 不被任何层反向依赖，其他层拿到的只是这份快照。
+配置只有一个来源：`config/settings.py` 的 `Settings`——一个 pydantic 模型，字段带类型与范围校验，
+`frozen=True`。`load()` 只在进程入口调一次，之后整条链路拿到的都是**同一个不可变对象**。
+
+**没有模块级单例。** 需要配置的函数把 `cfg` 作为参数收下，逐层往下传；用例层和执行层的边界对象
+是 `Store`，它由 `cfg` 构造并持有 `cfg`（`store.cfg`），所以目录解析、库路径不用再单独传。
+运行期要换参数就用 `config.override.apply(cfg, ["asr.model=large-v3"])` 得到新对象，
+原对象不变——同一进程里不同任务跑不同参数不会互相污染。
+
+```
+CLI --set / HTTP config ──▶ override.apply(cfg, pairs) ──▶ 新 Settings ──▶ Store(cfg) ──▶ run_job
+```
+
+覆盖走白名单：`asr.*` / `llm.*` / `fetch.timeout` / `max_download_mb` / `cookies.*`。
+`data_dir`、`proxy`、外部程序路径不进白名单——它们属于部署决策，能从请求里改就等于把
+文件系统写入位置和出口交给调用方。
+
+每次运行把当次配置写进任务目录的 `config.json`（密钥用 `SecretStr` 承载，序列化即打码），
+并抄进 `manifest.json` 的 `config` 字段。事后 `cli <job> --config` 或 `GET /api/jobs/<id>/config`
+就能回答「这份报告当时是什么参数跑出来的」。
 
 路径要同时应付两种部署形态，规则写在 `config/env.py`：
 

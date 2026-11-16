@@ -16,13 +16,13 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from linkdigest.config import settings  # noqa: E402
+from linkdigest.config import load  # noqa: E402
 from linkdigest.contracts.models import TranscriptBundle  # noqa: E402
 from linkdigest.conventions.jsonio import read_json, write_json  # noqa: E402
 from linkdigest.handoff import BRIEF, export_handoff  # noqa: E402
 from linkdigest.jobs.db import Store  # noqa: E402
 from linkdigest.jobs.finalize import finalize  # noqa: E402
-from linkdigest.jobs.layout import job_dir, job_dir_name, job_path  # noqa: E402
+from linkdigest.jobs.layout import job_dir_name  # noqa: E402
 
 
 def main() -> int:
@@ -32,39 +32,39 @@ def main() -> int:
     parser.add_argument("--limit", type=int, default=500)
     args = parser.parse_args()
 
-    store = Store()
+    store = Store(load())
     jobs = store.list(args.limit)
     renamed = exported = 0
 
     for job in jobs:
-        before = job_dir(job.id).name
+        before = store.job_dir(job.id).name
         after = job_dir_name(job) if not args.write else finalize(store, job.id).name
         if before != after:
             renamed += 1
             print(f"· {before}\n  → {after}")
 
-        bundle_path = job_path(job.id, "transcript.json")
+        bundle_path = store.job_path(job.id, "transcript.json")
         wanted = job.degraded and bundle_path.exists() and (
-            args.refresh or not job_path(job.id, BRIEF).exists()
+            args.refresh or not store.job_path(job.id, BRIEF).exists()
         )
         if wanted:
             exported += 1
             if args.write:
                 bundle = TranscriptBundle.model_validate(read_json(bundle_path))
-                export_handoff(job.id, bundle)
+                export_handoff(store, job.id, bundle)
                 print(f"  + 交接包 handoff/（{len(bundle.segments)} 段 / {bundle.quality.chars} 字）")
         elif args.write and bundle_path.exists():
             # 目录改名后，契约里的音频路径要跟着改，不然 agent 顺着找会扑空
             payload = read_json(bundle_path)
             media = payload.get("media") or {}
-            want = f"jobs/{job_dir(job.id).name}/audio.wav"
-            if media.get("audio_path") != want and (job_dir(job.id) / "audio.wav").exists():
+            want = f"jobs/{store.job_dir(job.id).name}/audio.wav"
+            if media.get("audio_path") != want and (store.job_dir(job.id) / "audio.wav").exists():
                 media["audio_path"] = want
                 write_json(bundle_path, payload)
 
     mode = "已写入" if args.write else "预览（加 --write 生效）"
     print(f"\n{mode}：{len(jobs)} 个任务，改名 {renamed} 个，补交接包 {exported} 个")
-    print(f"索引：{settings.jobs_dir / 'INDEX.md'}")
+    print(f"索引：{store.jobs_dir / 'INDEX.md'}")
     if not args.write:
         print("（预览不会动磁盘；确认无误后加 --write）")
     return 0

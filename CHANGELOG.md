@@ -16,6 +16,21 @@
 - 去掉 import 副作用：代理写入环境变量改由 `bootstrap()` 显式执行。
 - 重复实现收敛：`ts()` / `_chapters_block` / `_to_report` 各只剩一份。
 
+### 变更（配置，对外接口有新增）
+
+- **`Settings` 换成 pydantic 模型**：字段带类型、范围与非空校验，`frozen=True` 不可变。
+  数值越界直接报错（`ASR_MAX_SECONDS` 下限 60、`LLM_TEMPERATURE` 0–2、`LLM_CHUNK_CHARS` 下限 500），
+  不再带着半截配置往下跑。
+- **去掉模块级 `settings` 单例**：`load()` 在入口解析一次，`cfg` 逐层显式传参；
+  `Store` 由 `cfg` 构造并持有它，目录解析不再依赖全局。同一进程可以跑不同参数的多个任务。
+- **新增单次运行覆盖**：CLI `--set KEY=VALUE`、HTTP `POST /api/jobs` 的 `config` 字段。
+  白名单制，`data_dir` / `proxy` / 外部程序路径不可覆盖。`--no-llm` 等价于 `--set llm.api_key=`。
+- **新增配置快照**：每次运行写 `config.json`（密钥打码）并抄进 `manifest.json`；
+  `cli <job> --config` 与 `GET /api/jobs/<id>/config` 可查，历史任务因此可复现。
+- `llm_api_key` 改用 `SecretStr` 承载，序列化自动打码。
+- ASR 引擎显式指定但未安装时直接报错，不再悄悄回退到别的引擎。
+- 配置报错换成中文原文：`asr_max_seconds：不能小于 60`，不再把 pydantic 的英文报错直接推给用户。
+
 ### 修复
 
 - **已安装形态下配置读不到**：路径锚点原本按 `parents[3]` 硬算，`pip install` 后指向
