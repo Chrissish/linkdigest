@@ -1,0 +1,96 @@
+{
+  "version": 1,
+  "note": "匹配规则按顺序生效，命中即返回。match_any 里的词对异常消息做小写包含判断；when 是代码里注册的条件名（见 net/errors.py 的 CONDITIONS）。占位符由 LazyContext 提供：{host} {url} {detail} {detail_short} {runtime} {cookies_path} {cookies_state}",
+  "rules": [
+    {
+      "id": "drm",
+      "match_any": ["[drm]", "drm protection", "widevine", "playready", "fairplay"],
+      "text": "{host} 的音轨带 DRM 加密（Widevine/FairPlay），不属于可下载范畴：Spotify、Apple Music、网易云、QQ音乐的音乐内容都在这一列，任何工具都解不开。播客例外——播客的音源在节目自己的 RSS 里，本程序会自动去源头取；如果这条链接是音乐单曲，只能手动上传音频文件。"
+    },
+    {
+      "id": "proxy_rejected",
+      "match_any": ["tunnel connection failed", "proxyerror", "proxy error", "407"],
+      "text": "网络不可达：到 {host} 的连接被本机代理拒绝（Proxy 502）。HTTP_PROXY/HTTPS_PROXY 指向的代理没有放行这个域名——在能直连该站点的环境启动服务，或在代理里放行它。"
+    },
+    {
+      "id": "js_challenge",
+      "match_any": ["requested format is not available", "n challenge", "only images are available"],
+      "text": "{host} 只返回了封面图，拿不到音轨：YouTube 的 n 挑战没解开。需要 JS 运行时（当前 {runtime}）和 yt-dlp-ejs 组件。确认 `.venv/bin/pip install yt-dlp-ejs`，且 node/deno 可用；如果 NODE_OPTIONS 里塞了 --require 的 shim（IDE、沙箱常这么干），node 会在权限模式下一启动就退出，本程序已自动摘掉该变量。"
+    },
+    {
+      "id": "bot_check_logged_in",
+      "match_any": ["sign in to confirm", "not a bot", "confirm you're not a bot", "cookies-from-browser"],
+      "when": "cookies_logged_in",
+      "text": "{host} 要求登录校验，但 cookies.txt 里确实有登录态——这次是出口 IP 被判定成机器人。换一个出口（家宽/住宅代理）重试，或降低请求频率；带登录态反复失败时，是 IP 的问题，不是 cookies 的问题。"
+    },
+    {
+      "id": "bot_check_guest",
+      "match_any": ["sign in to confirm", "not a bot", "confirm you're not a bot", "cookies-from-browser"],
+      "when": "cookies_guest",
+      "text": "{host} 要求登录校验（平台把当前出口 IP 判成了机器人）。有效的做法只有两个：\n  1) 导出 cookies.txt：在**已登录且正在播放视频**的窗口里导出（要用能带上 HttpOnly 的工具，如 Get cookies.txt LOCALLY），存到 {cookies_path}，或用 COOKIES_FILE 指路径；\n  2) 复用浏览器登录态：.env 写 COOKIES_FROM_BROWSER=chrome（或 safari/edge），并给终端「完全磁盘访问权限」，重启服务。{cookies_state}"
+    },
+    {
+      "id": "unavailable",
+      "match_any": [
+        "video unavailable",
+        "private video",
+        "has been removed",
+        "members-only",
+        "this video is not available",
+        "account has been terminated"
+      ],
+      "text": "内容不可用：{host} 上的这条内容被删除、私有或仅限会员。"
+    },
+    {
+      "id": "geo_blocked",
+      "match_any": ["not available in your country", "geo restricted", "geo-restriction"],
+      "text": "地区限制：{host} 判定当前网络所在地区不可播放，需要可用地区的出口。"
+    },
+    {
+      "id": "unsupported",
+      "match_any": ["unsupported url"],
+      "text": "不支持这个链接：{host} 的页面结构不在已接入的解析范围内，可改为上传音频文件。"
+    },
+    {
+      "id": "forbidden",
+      "match_any": ["http error 403", "403 forbidden"],
+      "text": "被平台拒绝（403）：{host} 判定为自动抓取，通常需要 cookies 或降低请求频率。"
+    },
+    {
+      "id": "not_found",
+      "match_any": ["http error 404", "404 not found"],
+      "text": "链接不存在（404）：{host} 上没有这个页面，检查链接是否完整。"
+    },
+    {
+      "id": "timeout",
+      "match_any": ["timed out", "timeout"],
+      "text": "连接超时：{host} 没在限定时间内响应，网络不稳或站点在限速。"
+    },
+    {
+      "id": "network",
+      "match_any": [
+        "name or service not known",
+        "nodename nor servname",
+        "temporary failure in name resolution",
+        "getaddrinfo",
+        "connection reset",
+        "connection refused",
+        "network is unreachable",
+        "ssl",
+        "certificate"
+      ],
+      "text": "网络层失败：连不上 {host}（{detail_short}）。检查 DNS、代理和本机网络。"
+    },
+    {
+      "id": "no_audio_format",
+      "match_any": ["no video formats found", "requested format not available"],
+      "text": "没有可用音轨：{host} 这个页面里没有可直接下载的音频格式。"
+    },
+    {
+      "id": "too_large",
+      "match_any": ["larger than max-filesize", "max_filesize"],
+      "text": "文件超过体积上限（MAX_DOWNLOAD_MB），调大后重试。"
+    }
+  ],
+  "fallback": "采集失败：{detail}"
+}

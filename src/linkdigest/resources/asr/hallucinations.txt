@@ -1,0 +1,15 @@
+# Whisper 在静音/噪声段固定产出的「句子」。一行一条，比较时忽略大小写与标点。
+# 命中即丢段，并计入 quality.flags.hallucination_dropped。
+# 追加自己的：写进 data/hallucinations.txt（同样一行一条），不会覆盖这份内置表。
+请不吝点赞订阅转发打赏支持明镜与点点栏目
+字幕由amaraorg社区提供
+字幕志愿者
+amaraorg
+subtitle
+subtitlesby
+thankyouforwatching
+thanksforwatch
+pleasesubscribe
+明镜与点点
+小玲和Peter
+本字幕由

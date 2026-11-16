@@ -53,7 +53,11 @@ linkdigest = "linkdigest.cli:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-linkdigest = ["templates/*.html"]
+# 非代码资源随包分发：提示词、模板、报错文案、网页。
+linkdigest = [
+  "resources/*/*",
+  "resources/web/static/*",
+]
 
 [tool.ruff]
 line-length = 110
