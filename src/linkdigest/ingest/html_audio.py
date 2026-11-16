@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 
+from ..config import Settings
 from ..contracts.models import SourceMeta
 from ..net.http import get_text
 from .classify import detect_platform
@@ -11,9 +12,9 @@ from .platforms import AUDIO_URL_RE
 from .result import IngestResult
 
 
-def ingest(url: str) -> IngestResult | None:
+def ingest(cfg: Settings, url: str) -> IngestResult | None:
     try:
-        html = get_text(url)
+        html = get_text(cfg, url)
     except Exception:  # noqa: BLE001 - 捞不到就走别的路，不在这里报错
         return None
     match = AUDIO_URL_RE.search(html)

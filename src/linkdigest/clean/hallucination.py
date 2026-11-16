@@ -6,15 +6,15 @@
 
 from __future__ import annotations
 
-from ..config import settings
+from ..config import Settings
 from ..conventions.resources import text as resource_text
 from .text import comparison_key
 
 
-def load_blacklist() -> tuple[str, ...]:
+def load_blacklist(cfg: Settings) -> tuple[str, ...]:
     builtin = _lines(resource_text("asr/hallucinations.txt"))
     extra: list[str] = []
-    path = settings.data_dir / "hallucinations.txt"
+    path = cfg.data_dir / "hallucinations.txt"
     if path.exists():
         extra = _lines(path.read_text(encoding="utf-8"))
     return tuple(builtin) + tuple(extra)

@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from urllib.parse import urlsplit
 
+from ...config import Settings
 from ...contracts.models import SourceMeta
 from ...net import http
 from ...net.errors import DownloadFailure
@@ -16,29 +17,29 @@ from . import apple, spotify
 from .target import PodcastTarget
 
 
-def expand_short(url: str) -> str:
+def expand_short(cfg: Settings, url: str) -> str:
     """spotify.link / apple.co 这类短链先跟一次重定向，拿到真实页面。"""
     host = (urlsplit(url).hostname or "").lower()
     if not any(host == d or host.endswith("." + d) for d in SHORT_LINK_HOSTS):
         return url
     try:
-        with http.client(timeout=10.0) as session:
+        with http.client(cfg, timeout=10.0) as session:
             return str(session.get(url).url) or url
     except Exception:  # noqa: BLE001 - 短链失败就按原链接继续，后面的解析会给出具体原因
         return url
 
 
-def _target(url: str, platform: str) -> PodcastTarget:
-    return spotify.resolve(url) if platform == "spotify" else apple.resolve(url)
+def _target(cfg: Settings, url: str, platform: str) -> PodcastTarget:
+    return spotify.resolve(cfg, url) if platform == "spotify" else apple.resolve(cfg, url)
 
 
-def ingest(url: str, workdir: Path, platform: str) -> IngestResult:
-    url = expand_short(url)
-    target = _target(url, platform)
+def ingest(cfg: Settings, url: str, workdir: Path, platform: str) -> IngestResult:
+    url = expand_short(cfg, url)
+    target = _target(cfg, url, platform)
     if not target.audio_url:
         raise DownloadFailure("解析到了元数据但没有音频直链，换个链接或上传音频文件。")
 
-    media = stream_to(target.audio_url, workdir / f"source{audio_suffix(target.audio_url)}")
+    media = stream_to(cfg, target.audio_url, workdir / f"source{audio_suffix(target.audio_url)}")
     meta = SourceMeta(
         kind="audio",
         platform=platform,

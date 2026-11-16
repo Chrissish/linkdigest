@@ -6,12 +6,14 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-from ..config import settings
 from ..conventions.jsonio import read_json
 from ..conventions.resources import text as resource_text
-from .layout import job_dir
 from .models import Job
+
+if TYPE_CHECKING:
+    from .db import Store
 
 
 def _state(job: Job) -> str:
@@ -22,8 +24,8 @@ def _state(job: Job) -> str:
     return "完成" if job.status == "done" else job.stage
 
 
-def _tags(job: Job) -> str:
-    report_file = job_dir(job.id) / "report.json"
+def _tags(store: "Store", job: Job) -> str:
+    report_file = store.job_path(job.id, "report.json")
     if not report_file.exists():
         return ""
     try:
@@ -37,24 +39,22 @@ def _clip(text: str, limit: int) -> str:
     return text[: limit - 1] + "…" if len(text) > limit else text
 
 
-def _row(job: Job) -> str:
+def _row(store: "Store", job: Job) -> str:
     title = _clip((job.title or job.input).replace("|", "／"), 46)
     source = _clip(job.input.replace("|", "／"), 60)
     return (
-        f"| `{job_dir(job.id).name}` | {title} | {job.platform or '-'} | {_state(job)} "
-        f"| {job.chars or '-'} | {_tags(job) or '-'} | {source} |"
+        f"| `{store.job_dir(job.id).name}` | {title} | {job.platform or '-'} | {_state(job)} "
+        f"| {job.chars or '-'} | {_tags(store, job) or '-'} | {source} |"
     )
 
 
-def refresh_index(jobs: list[Job] | None = None, limit: int = 300) -> Path:
+def refresh_index(store: "Store", jobs: list[Job] | None = None, limit: int = 300) -> Path:
     if jobs is None:
-        from .db import Store
-
-        jobs = Store().list(limit)
-    path = settings.jobs_dir / "INDEX.md"
+        jobs = store.list(limit)
+    path = store.jobs_dir / "INDEX.md"
     path.parent.mkdir(parents=True, exist_ok=True)
     body = resource_text("templates/index.md").format(
-        count=len(jobs), rows="\n".join(_row(job) for job in jobs)
+        count=len(jobs), rows="\n".join(_row(store, job) for job in jobs)
     )
     path.write_text(body, encoding="utf-8")
     return path

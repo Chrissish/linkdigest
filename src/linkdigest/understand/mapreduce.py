@@ -14,7 +14,7 @@ from dataclasses import dataclass
 
 from ..capabilities.llm import LLMClient, LLMError
 from ..capabilities.llm.base import JsonChat
-from ..config import settings
+from ..config import Settings
 from ..contracts.models import Report, TranscriptBundle
 from ..conventions.timecode import ts
 from . import prompts
@@ -31,9 +31,11 @@ class ReportRun:
     chunks: int
 
 
-def build_report(bundle: TranscriptBundle, client: JsonChat | None = None) -> tuple[Report, ReportRun]:
-    client = client or LLMClient()
-    chunks = chunk_bundle(bundle)
+def build_report(
+    cfg: Settings, bundle: TranscriptBundle, client: JsonChat | None = None
+) -> tuple[Report, ReportRun]:
+    client = client if client is not None else LLMClient(cfg)
+    chunks = chunk_bundle(cfg, bundle)
     if not client.available:
         return degraded_report(bundle), ReportRun("degraded", len(chunks))
 
@@ -52,7 +54,7 @@ def build_report(bundle: TranscriptBundle, client: JsonChat | None = None) -> tu
         duration=ts(duration) if duration else f"{bundle.quality.chars} 字",
         lang=bundle.language.detected,
         chars=bundle.quality.chars,
-        digests=digests_text[: settings.llm_chunk_chars * 4],
+        digests=digests_text[: cfg.llm_chunk_chars * 4],
         chapters=chapters_block(bundle),
     )
     try:
@@ -64,7 +66,7 @@ def build_report(bundle: TranscriptBundle, client: JsonChat | None = None) -> tu
         return report, ReportRun("partial", len(chunks))
 
     report = report_from_payload(payload)
-    report.notes.append(f"分块 {len(chunks)} 段，模型 {settings.llm_model}")
+    report.notes.append(f"分块 {len(chunks)} 段，模型 {cfg.llm_model}")
     return report, ReportRun("llm", len(chunks))
 
 

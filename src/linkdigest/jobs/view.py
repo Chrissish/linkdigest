@@ -2,17 +2,19 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from .layout import job_dir
 from .models import Job
 from .stages import STAGES
 
+if TYPE_CHECKING:
+    from .db import Store
 
-def job_view(job: Job) -> dict[str, Any]:
+
+def job_view(store: "Store", job: Job) -> dict[str, Any]:
     return {
         "id": job.id,
-        "dir": job_dir(job.id).name,
+        "dir": store.job_dir(job.id).name,
         "input": job.input,
         "input_kind": job.input_kind,
         "status": job.status,

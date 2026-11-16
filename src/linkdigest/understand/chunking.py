@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from ..config import settings
+from ..config import Settings
 from ..contracts.models import TranscriptBundle
 from ..conventions.timecode import ts
 
@@ -21,8 +21,10 @@ class Chunk:
     chars: int
 
 
-def chunk_bundle(bundle: TranscriptBundle, max_chars: int | None = None) -> list[Chunk]:
-    budget = max_chars or settings.llm_chunk_chars
+def chunk_bundle(
+    cfg: Settings, bundle: TranscriptBundle, max_chars: int | None = None
+) -> list[Chunk]:
+    budget = max_chars or cfg.llm_chunk_chars
     timeline = bundle.has_timeline
     chunks: list[Chunk] = []
     lines: list[str] = []

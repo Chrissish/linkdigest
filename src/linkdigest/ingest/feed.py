@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from ..config import Settings
 from ..contracts.models import SourceMeta
 from .result import IngestResult
 
@@ -21,7 +22,7 @@ def entry_audio(entry) -> str | None:
     return None
 
 
-def ingest(url: str) -> IngestResult:
+def ingest(cfg: Settings, url: str) -> IngestResult:
     import feedparser
 
     feed = feedparser.parse(url)

@@ -11,7 +11,7 @@ import re
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from ..config import settings
+from ..config import Settings
 from . import http as transport
 from . import proxy
 from .errors import explain_error
@@ -34,12 +34,12 @@ VISITOR_ONLY = (
 )
 
 
-def cookie_file() -> str | None:
+def cookie_file(cfg: Settings) -> str | None:
     """用户自备的 cookies.txt 优先（难啃平台必需），否则用数据目录里那份。"""
-    configured = settings.cookies_file
+    configured = cfg.cookies_file
     if configured is not None and configured.exists():
         return str(configured)
-    default = settings.cookies_path
+    default = cfg.cookies_path
     return str(default) if default.exists() else None
 
 
@@ -59,9 +59,9 @@ def cookie_rows(path: Path) -> list[tuple[str, str]]:
     return rows
 
 
-def summary(path: str | Path | None = None) -> dict:
+def summary(cfg: Settings, path: str | Path | None = None) -> dict:
     """分开报两件事：浏览器登录过没有、YouTube 认不认。"""
-    discovered = str(path) if path else cookie_file()
+    discovered = str(path) if path else cookie_file(cfg)
     if not discovered:
         return {"present": False}
     target = Path(discovered)
@@ -104,9 +104,11 @@ def summary(path: str | Path | None = None) -> dict:
     }
 
 
-def login_state(url: str = "https://www.youtube.com/", path: str | Path | None = None) -> dict:
+def login_state(
+    cfg: Settings, url: str = "https://www.youtube.com/", path: str | Path | None = None
+) -> dict:
     """拿 cookies 真打一次站点，看服务端认不认——比任何本地猜测都可靠。"""
-    discovered = str(path) if path else cookie_file()
+    discovered = str(path) if path else cookie_file(cfg)
     if not discovered or not Path(discovered).exists():
         return {"ok": False, "error": "没有 cookies.txt"}
     jar = http.cookiejar.MozillaCookieJar(discovered)
@@ -117,10 +119,10 @@ def login_state(url: str = "https://www.youtube.com/", path: str | Path | None =
     host = urlsplit(url).hostname or ""
     cookies = {c.name: c.value for c in jar if host.endswith(c.domain.lstrip(".")) or c.domain == ""}
     try:
-        with transport.client(timeout=15) as session:
+        with transport.client(cfg, timeout=15) as session:
             response = session.get(url, cookies=cookies)
     except Exception as exc:  # noqa: BLE001
-        return {"ok": False, "error": explain_error(exc, url)}
+        return {"ok": False, "error": explain_error(exc, url, cfg)}
     match = re.search(r'"LOGGED_IN":(true|false)', response.text)
     return {
         "ok": response.status_code < 400,

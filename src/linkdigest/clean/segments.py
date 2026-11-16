@@ -11,6 +11,7 @@ from collections import Counter
 from dataclasses import dataclass
 from typing import Protocol
 
+from ..config import Settings
 from .hallucination import is_hallucination, load_blacklist
 from .text import CJK, clean_text, comparison_key
 
@@ -58,8 +59,8 @@ def collapse_inline_repetition(text: str, min_repeat: int = 4) -> tuple[str, int
     return text, removed
 
 
-def normalize_segments(raw: list[SpokenSegment]) -> CleanResult:
-    blacklist = load_blacklist()
+def normalize_segments(cfg: Settings, raw: list[SpokenSegment]) -> CleanResult:
+    blacklist = load_blacklist(cfg)
     flags: Counter[str] = Counter()
     warnings: list[str] = []
 
@@ -168,7 +169,7 @@ def split_long_paragraph(text: str, budget: int = 180) -> list[str]:
     return out or [text]
 
 
-def text_to_segments(text: str) -> CleanResult:
+def text_to_segments(cfg: Settings, text: str) -> CleanResult:
     """图文源：按段落/句子切，start/end 用段落下标充当引用锚点。"""
     blocks: list[str] = []
     for paragraph in re.split(r"\n{1,}", text):
@@ -176,7 +177,7 @@ def text_to_segments(text: str) -> CleanResult:
         if cleaned:
             blocks.extend(split_long_paragraph(cleaned))
     raw = [RawSegment(start=float(i), end=float(i) + 1.0, text=p) for i, p in enumerate(blocks)]
-    result = normalize_segments(raw)
+    result = normalize_segments(cfg, raw)
     for seg in result.segments:
         seg["flags"] = ["para_index"]
     return result

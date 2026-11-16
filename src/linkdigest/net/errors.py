@@ -3,6 +3,9 @@
 文案全部在 `resources/messages/download_errors.json`，这里只做三件事：
 匹配关键词、判断条件（比如 cookies 是否已登录）、按需取值填充占位符。
 加一条新报错 = 改 JSON，不用碰代码。
+
+配置由调用方传进来：解释报错要用到 JS 运行时路径、cookies 位置、数据目录，
+这些都不是常量，不该从模块级单例里读。
 """
 
 from __future__ import annotations
@@ -11,7 +14,7 @@ from collections.abc import Iterator, Mapping
 from typing import Callable
 from urllib.parse import urlsplit
 
-from ..config import settings
+from ..config import Settings
 from ..conventions.resources import json_resource
 from ..conventions.text import first_line
 
@@ -20,17 +23,17 @@ class DownloadFailure(RuntimeError):
     """采集失败，消息面向用户：说清原因和下一步，不用「未找到文件」这种废信息。"""
 
 
-def explain_error(exc: BaseException | str, url: str) -> str:
+def explain_error(exc: BaseException | str, url: str, cfg: Settings) -> str:
     message = str(exc)
     lowered = message.lower()
-    context = _Context(url, message)
+    context = _Context(cfg, url, message)
     catalog = json_resource("messages/download_errors.json")
 
     for rule in catalog["rules"]:
         if not any(word in lowered for word in rule["match_any"]):
             continue
         condition = rule.get("when")
-        if condition and not CONDITIONS[condition]():
+        if condition and not CONDITIONS[condition](cfg):
             continue
         return _render(rule["text"], context)
     return _render(catalog["fallback"], context)
@@ -43,22 +46,23 @@ def _render(template: str, context: Mapping[str, str]) -> str:
         return template
 
 
-def _cookies() -> dict:
+def _cookies(cfg: Settings) -> dict:
     from . import cookies  # 延迟导入：只在真的需要解释登录问题时才读磁盘
 
-    return cookies.summary()
+    return cookies.summary(cfg)
 
 
-CONDITIONS: dict[str, Callable[[], bool]] = {
-    "cookies_logged_in": lambda: bool(_cookies().get("logged_in")),
-    "cookies_guest": lambda: not _cookies().get("logged_in"),
+CONDITIONS: dict[str, Callable[[Settings], bool]] = {
+    "cookies_logged_in": lambda cfg: bool(_cookies(cfg).get("logged_in")),
+    "cookies_guest": lambda cfg: not _cookies(cfg).get("logged_in"),
 }
 
 
 class _Context(Mapping[str, str]):
     """占位符按需计算：没装 OCR、没配 cookies 的机器，解释报错时不该去读磁盘。"""
 
-    def __init__(self, url: str, message: str) -> None:
+    def __init__(self, cfg: Settings, url: str, message: str) -> None:
+        self._cfg = cfg
         host = urlsplit(url).hostname or url
         self._base = {
             "url": url,
@@ -67,8 +71,8 @@ class _Context(Mapping[str, str]):
             "detail_short": first_line(message, 90) or "未知原因",
         }
         self._providers: dict[str, Callable[[], str]] = {
-            "runtime": lambda: settings.js_runtime or "未检测到",
-            "cookies_path": lambda: str(settings.cookies_file or settings.cookies_path),
+            "runtime": lambda: cfg.js_runtime or "未检测到",
+            "cookies_path": lambda: str(cfg.cookies_file or cfg.cookies_path),
             "cookies_state": self._cookies_state,
         }
         self._computed: dict[str, str] = {}
@@ -91,9 +95,8 @@ class _Context(Mapping[str, str]):
     def __len__(self) -> int:
         return len(self._base) + len(self._providers)
 
-    @staticmethod
-    def _cookies_state() -> str:
-        info = _cookies()
+    def _cookies_state(self) -> str:
+        info = _cookies(self._cfg)
         if info.get("present"):
             return f"\n当前 {info.get('path')}：{info.get('hint') or '没有可用的登录态。'}"
-        return f"\n当前没有 cookies.txt（期望位置 {settings.cookies_file or settings.cookies_path}）。"
+        return f"\n当前没有 cookies.txt（期望位置 {self._cfg.cookies_file or self._cfg.cookies_path}）。"

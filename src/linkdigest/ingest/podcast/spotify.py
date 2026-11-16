@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from urllib.parse import quote
 
+from ...config import Settings
 from ...net.errors import DownloadFailure
 from ...net.transfer import get_json
 from ..feed import entry_audio, matches
@@ -21,7 +22,7 @@ from .titles import title_score
 DIRECT_HIT = 0.72
 
 
-def resolve(url: str) -> PodcastTarget:
+def resolve(cfg: Settings, url: str) -> PodcastTarget:
     match = SPOTIFY_ID.search(url)
     if not match:
         raise DownloadFailure(
@@ -40,7 +41,7 @@ def resolve(url: str) -> PodcastTarget:
             "这不是解析器能力问题。本程序处理的是播客和可下载音视频，音乐请手动上传音频文件。"
         )
 
-    meta = get_json(f"{SPOTIFY_OEMBED}?url={quote(url, safe='')}")
+    meta = get_json(cfg, f"{SPOTIFY_OEMBED}?url={quote(url, safe='')}")
     target = PodcastTarget(
         title=(meta.get("title") or "").strip() or None,
         thumbnail=meta.get("thumbnail_url"),
@@ -51,7 +52,7 @@ def resolve(url: str) -> PodcastTarget:
 
     # 第一跳：按单集标题直接在播客库里搜（iTunes Search 覆盖了绝大多数公开播客）
     best, score = None, 0.0
-    for row in itunes.episodes(target.title):
+    for row in itunes.episodes(cfg, target.title):
         current = title_score(target.title, row.get("trackName"))
         if current > score:
             best, score = row, current
@@ -63,7 +64,7 @@ def resolve(url: str) -> PodcastTarget:
             return found
 
     # 第二跳：标题被平台改写过时，退到「搜节目 → 解析 feed → 在 feed 里模糊匹配」
-    for feed_url in itunes.feeds(target.title)[:4]:
+    for feed_url in itunes.feeds(cfg, target.title)[:4]:
         entry = matches(feed_url, target.title)
         if not entry:
             continue

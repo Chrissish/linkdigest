@@ -5,20 +5,21 @@ from __future__ import annotations
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from ..contracts.models import Report, TranscriptBundle
 from ..conventions.jsonio import read_json, write_json
-from ..jobs.db import Store
 from ..jobs.finalize import finalize
-from ..jobs.layout import job_path
 from ..render.save import save_report
 from ..understand.payload import report_from_payload
 from .paths import ANSWER, BRIEF
 
+if TYPE_CHECKING:
+    from ..jobs.db import Store
 
-def read_answer(job_id: str, path: Path | None = None) -> dict[str, Any]:
-    target = path or job_path(job_id, ANSWER)
+
+def read_answer(store: "Store", job_id: str, path: Path | None = None) -> dict[str, Any]:
+    target = path or store.job_path(job_id, ANSWER)
     if not target.exists():
         raise FileNotFoundError(
             f"没有找到 {target.name}。先让 agent 按 {BRIEF} 产出答案，"
@@ -31,13 +32,15 @@ def read_answer(job_id: str, path: Path | None = None) -> dict[str, Any]:
 
 
 def apply_answer(
-    job_id: str, payload: dict[str, Any], store: Store | None = None, source: str = "external-agent"
+    store: "Store",
+    job_id: str,
+    payload: dict[str, Any],
+    source: str = "external-agent",
 ) -> Report:
-    store = store or Store()
     job = store.get(job_id)
     if job is None:
         raise KeyError(f"job {job_id} 不存在")
-    bundle_path = job_path(job_id, "transcript.json")
+    bundle_path = store.job_path(job_id, "transcript.json")
     if not bundle_path.exists():
         raise FileNotFoundError("这个任务还没有 transcript.json，先跑完确定性层")
     bundle = TranscriptBundle.model_validate(read_json(bundle_path))
@@ -55,15 +58,16 @@ def apply_answer(
     if not report.sections:
         report.notes.append("未提供 sections，报告没有时间码锚点，无法逐节回查原片。")
 
-    write_json(job_path(job_id, "report.json"), json.loads(report.model_dump_json()))
+    write_json(store.job_path(job_id, "report.json"), json.loads(report.model_dump_json()))
     save_report(
+        store,
         job_id,
         bundle,
         report,
         extra={"mode": "external", "llm_stats": {}, "job_id": job.id, "created_at": job.created_at},
     )
 
-    usage_path = job_path(job_id, "usage.json")
+    usage_path = store.job_path(job_id, "usage.json")
     usage = read_json(usage_path) if usage_path.exists() else {}
     usage.update(
         {

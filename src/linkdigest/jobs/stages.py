@@ -7,10 +7,10 @@ from __future__ import annotations
 
 import json
 from datetime import datetime, timezone
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from .layout import job_path
+if TYPE_CHECKING:  # 只为了类型：运行时不引入，避免 db ↔ stages 循环
+    from .db import Store
 
 STAGES = [
     ("queued", "排队"),
@@ -31,14 +31,15 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
-def append_stage(job_id: str, record: dict[str, Any]) -> None:
-    path = job_path(job_id, "stages.jsonl")
+def append_stage(store: "Store", job_id: str, record: dict[str, Any]) -> None:
+    path = store.job_path(job_id, "stages.jsonl")
+    path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8") as fh:
         fh.write(json.dumps({"ts": _now(), **record}, ensure_ascii=False) + "\n")
 
 
-def read_stages(job_id: str) -> list[dict[str, Any]]:
-    path: Path = job_path(job_id, "stages.jsonl")
+def read_stages(store: "Store", job_id: str) -> list[dict[str, Any]]:
+    path = store.job_path(job_id, "stages.jsonl")
     if not path.exists():
         return []
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]

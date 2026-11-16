@@ -12,15 +12,15 @@ import os
 import time
 from urllib.parse import urlsplit
 
-from ..config import settings
+from ..config import Settings
 from . import http, proxy
 from .errors import explain_error
 
 
-def _probe(anchor: str, timeout: float, upstream: str | None) -> dict:
+def _probe(cfg: Settings, anchor: str, timeout: float, upstream: str | None) -> dict:
     started = time.time()
     try:
-        with http.client(timeout=timeout, proxy=upstream, direct=upstream is None) as session:
+        with http.client(cfg, timeout=timeout, proxy=upstream, direct=upstream is None) as session:
             response = session.get(anchor)
         return {
             "ok": response.status_code < 400,
@@ -28,7 +28,7 @@ def _probe(anchor: str, timeout: float, upstream: str | None) -> dict:
             "elapsed_ms": int((time.time() - started) * 1000),
         }
     except Exception as exc:  # noqa: BLE001
-        message = explain_error(exc, anchor)
+        message = explain_error(exc, anchor, cfg)
         if upstream and ("超时" in message or "网络层失败" in message):
             parsed = urlsplit(proxy.normalize(upstream))
             message += (
@@ -38,14 +38,14 @@ def _probe(anchor: str, timeout: float, upstream: str | None) -> dict:
         return {"ok": False, "error": message, "elapsed_ms": int((time.time() - started) * 1000)}
 
 
-def reachability(url: str, timeout: float = 8.0) -> dict:
+def reachability(cfg: Settings, url: str, timeout: float = 8.0) -> dict:
     parts = urlsplit(url)
     host = parts.hostname or ""
     anchor = f"{parts.scheme or 'https'}://{parts.netloc or host}/"
-    candidates = proxy.candidates(settings.system_proxy)
+    candidates = proxy.candidates(cfg.system_proxy)
     attempts: list[dict] = []
 
-    direct = _probe(anchor, timeout, None)
+    direct = _probe(cfg, anchor, timeout, None)
     direct["via"] = "直连"
     attempts.append(direct)
     if direct["ok"]:
@@ -68,12 +68,12 @@ def reachability(url: str, timeout: float = 8.0) -> dict:
 
     errors = [f"直连失败：{direct.get('error')}"]
     for candidate in candidates:
-        proxied = _probe(anchor, timeout, candidate)
+        proxied = _probe(cfg, anchor, timeout, candidate)
         proxied["via"] = f"代理 {candidate}"
         attempts.append(proxied)
         if proxied["ok"]:
             proxy.apply(candidate)
-            origin = "系统代理" if candidate == settings.system_proxy else "环境变量"
+            origin = "系统代理" if candidate == cfg.system_proxy else "环境变量"
             return {
                 "host": host,
                 "ok": True,

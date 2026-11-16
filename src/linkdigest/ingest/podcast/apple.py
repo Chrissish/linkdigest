@@ -2,26 +2,27 @@
 
 from __future__ import annotations
 
+from ...config import Settings
 from ...net.errors import DownloadFailure
 from ..platforms import APPLE_PODCAST_ID
 from . import itunes
 from .target import PodcastTarget
 
 
-def resolve(url: str) -> PodcastTarget:
+def resolve(cfg: Settings, url: str) -> PodcastTarget:
     match = APPLE_PODCAST_ID.search(url)
     if not match:
         raise DownloadFailure("Apple Podcasts 链接里没有找到 id，确认形式为 /podcast/名称/id123456789?i=1000600000000。")
     episode_id, show_id = match.group("episode"), match.group("show")
 
     if episode_id:
-        for row in itunes.lookup(episode_id):
+        for row in itunes.lookup(cfg, episode_id):
             target = itunes.to_target(row, "apple-lookup → enclosure")
             if target:
                 return target
 
     # 只给了节目 id：iTunes lookup 会返回该节目最近一集，取它并在 notes 里说明
-    for row in itunes.lookup(show_id, limit=1):
+    for row in itunes.lookup(cfg, show_id, limit=1):
         target = itunes.to_target(row, "apple-lookup → 节目最新一集")
         if target:
             return target

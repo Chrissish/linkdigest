@@ -7,18 +7,23 @@ from __future__ import annotations
 
 from urllib.parse import quote
 
+from ...config import Settings
 from ...net.transfer import get_json
 from ..platforms import ITUNES_LOOKUP, ITUNES_SEARCH
 from .target import PodcastTarget
 
 
-def episodes(term: str, limit: int = 12) -> list[dict]:
-    data = get_json(f"{ITUNES_SEARCH}?term={quote(term)}&entity=podcastEpisode&media=podcast&limit={limit}")
+def episodes(cfg: Settings, term: str, limit: int = 12) -> list[dict]:
+    data = get_json(
+        cfg, f"{ITUNES_SEARCH}?term={quote(term)}&entity=podcastEpisode&media=podcast&limit={limit}"
+    )
     return list(data.get("results") or [])
 
 
-def feeds(term: str, limit: int = 6) -> list[str]:
-    data = get_json(f"{ITUNES_SEARCH}?term={quote(term)}&entity=podcast&media=podcast&limit={limit}")
+def feeds(cfg: Settings, term: str, limit: int = 6) -> list[str]:
+    data = get_json(
+        cfg, f"{ITUNES_SEARCH}?term={quote(term)}&entity=podcast&media=podcast&limit={limit}"
+    )
     out: list[str] = []
     for row in data.get("results") or []:
         feed = row.get("feedUrl")
@@ -27,11 +32,11 @@ def feeds(term: str, limit: int = 6) -> list[str]:
     return out
 
 
-def lookup(target_id: str, limit: int | None = None) -> list[dict]:
+def lookup(cfg: Settings, target_id: str, limit: int | None = None) -> list[dict]:
     query = f"{ITUNES_LOOKUP}?id={target_id}&entity=podcastEpisode&media=podcast"
     if limit:
         query += f"&limit={limit}"
-    return list(get_json(query).get("results") or [])
+    return list(get_json(cfg, query).get("results") or [])
 
 
 def to_target(row: dict, route: str) -> PodcastTarget | None:

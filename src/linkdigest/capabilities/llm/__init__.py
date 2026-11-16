@@ -11,7 +11,7 @@ import re
 import time
 from typing import Any
 
-from ...config import settings
+from ...config import Settings
 from .base import JsonChat, LLMError
 from .openai import OpenAICompatibleTransport
 from .stats import LLMStats
@@ -20,10 +20,11 @@ FENCE_RE = re.compile(r"^```(?:json)?\s*|\s*```$", re.M)
 
 
 class LLMClient(JsonChat):
-    def __init__(self, transport: Any | None = None, model: str | None = None) -> None:
-        self.transport = transport or OpenAICompatibleTransport()
-        self.model = model or settings.llm_model
-        self.stats = LLMStats()
+    def __init__(self, cfg: Settings, transport: Any | None = None, model: str | None = None) -> None:
+        self.cfg = cfg
+        self.transport = transport if transport is not None else OpenAICompatibleTransport(cfg)
+        self.model = model or cfg.llm_model
+        self.stats = LLMStats(price_in=cfg.llm_price_in, price_out=cfg.llm_price_out)
 
     @property
     def available(self) -> bool:
@@ -42,7 +43,7 @@ class LLMClient(JsonChat):
         payload: dict[str, Any] = {
             "model": self.model,
             "messages": messages,
-            "temperature": settings.llm_temperature if temperature is None else temperature,
+            "temperature": self.cfg.llm_temperature if temperature is None else temperature,
             "max_tokens": max_tokens,
         }
         if json_mode:

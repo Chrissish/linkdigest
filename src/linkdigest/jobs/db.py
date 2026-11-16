@@ -1,4 +1,8 @@
-"""SQLite 状态库。只存任务状态，不存产物内容——产物在磁盘上，路径可推导。"""
+"""SQLite 状态库。只存任务状态，不存产物内容——产物在磁盘上，路径可推导。
+
+Store 是「一次运行」的作用域对象：配置从构造参数进来，目录解析挂在它身上。
+它不读全局配置，也不假设自己是进程里唯一的那个。
+"""
 
 from __future__ import annotations
 
@@ -9,8 +13,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from ..config import settings
-from .layout import job_dir
+from ..config import Settings
+from .layout import job_dir, job_dir_name, job_path
 from .models import Job
 
 _LOCK = threading.Lock()
@@ -43,11 +47,24 @@ def now() -> str:
 
 
 class Store:
-    def __init__(self, db_path: Path | None = None) -> None:
-        settings.ensure_dirs()
-        self.db_path = db_path or settings.db_path
+    def __init__(self, cfg: Settings) -> None:
+        cfg.ensure_dirs()
+        self.cfg = cfg
+        self.data_dir: Path = cfg.data_dir
+        self.jobs_dir: Path = cfg.jobs_dir
+        self.db_path: Path = cfg.db_path
         with self._conn() as conn:
             conn.executescript(SCHEMA)
+
+    # —— 目录解析：布局由配置决定，调用方不必知道 jobs_dir 在哪 ——
+    def job_dir(self, job_id: str) -> Path:
+        return job_dir(self.jobs_dir, job_id)
+
+    def job_path(self, job_id: str, name: str) -> Path:
+        return job_path(self.jobs_dir, job_id, name)
+
+    def dir_name(self, job: Job) -> str:
+        return job_dir_name(job)
 
     def _conn(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self.db_path, timeout=15)
@@ -64,7 +81,7 @@ class Store:
                 (job_id, input_value, input_kind, stamp, stamp),
             )
             row = conn.execute("SELECT * FROM jobs WHERE id = ?", (job_id,)).fetchone()
-        job_dir(job_id).mkdir(parents=True, exist_ok=True)
+        self.job_dir(job_id).mkdir(parents=True, exist_ok=True)
         return Job.from_row(row)
 
     def update(self, job_id: str, **fields: Any) -> None:
@@ -107,8 +124,8 @@ class Store:
             ).fetchone()
         if row is not None:
             return Job.from_row(row)
-        if settings.jobs_dir.exists():
-            for path in sorted(settings.jobs_dir.glob(f"*{token}*"), reverse=True):
+        if self.jobs_dir.exists():
+            for path in sorted(self.jobs_dir.glob(f"*{token}*"), reverse=True):
                 if path.is_dir():
                     found = self.get(path.name.rsplit("_", 1)[-1])
                     if found is not None:

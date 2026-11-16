@@ -6,23 +6,23 @@ import subprocess
 import wave
 from pathlib import Path
 
-from ..config import settings
+from ..config import Settings
 
 
 class MediaError(RuntimeError):
     pass
 
 
-def available() -> bool:
-    return bool(settings.ffmpeg)
+def available(cfg: Settings) -> bool:
+    return bool(cfg.ffmpeg)
 
 
-def to_wav(src: Path, dst: Path, timeout: int = 1800) -> Path:
-    if not settings.ffmpeg:
+def to_wav(cfg: Settings, src: Path, dst: Path, timeout: int = 1800) -> Path:
+    if not cfg.ffmpeg:
         raise MediaError("找不到 ffmpeg，请安装或设置 FFMPEG_BIN")
     dst.parent.mkdir(parents=True, exist_ok=True)
     cmd = [
-        settings.ffmpeg,
+        cfg.ffmpeg,
         "-hide_banner",
         "-loglevel",
         "error",
@@ -54,13 +54,13 @@ def wav_duration(path: Path) -> float:
     return frames / float(rate) if rate else 0.0
 
 
-def guard_duration(path: Path) -> float:
+def guard_duration(cfg: Settings, path: Path) -> float:
     duration = wav_duration(path)
     if duration <= 0.5:
         raise MediaError("音轨为空或过短")
-    if duration > settings.asr_max_seconds:
+    if duration > cfg.asr_max_seconds:
         raise MediaError(
-            f"音频 {duration / 60:.0f} 分钟超过上限 {settings.asr_max_seconds / 60:.0f} 分钟，"
+            f"音频 {duration / 60:.0f} 分钟超过上限 {cfg.asr_max_seconds / 60:.0f} 分钟，"
             "请先切分（ASR_MAX_SECONDS 可调）"
         )
     return duration

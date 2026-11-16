@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ...config import settings
+from ...config import Settings
 from .base import ASRResult, ASRSegment
 
 MLX_MODELS = {
@@ -20,8 +20,8 @@ MLX_MODELS = {
 class MlxWhisperEngine:
     name = "mlx-whisper"
 
-    def __init__(self) -> None:
-        self.repo = MLX_MODELS.get(settings.asr_model, settings.asr_model)
+    def __init__(self, cfg: Settings) -> None:
+        self.repo = MLX_MODELS.get(cfg.asr_model, cfg.asr_model)
 
     @property
     def engine_id(self) -> str:

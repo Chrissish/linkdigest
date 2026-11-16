@@ -2,20 +2,20 @@
 
 每阶段写状态与耗时，失败即停并保留已产生的产物。
 只做「按顺序串起来」和「把异常翻译成用户能读的失败原因」，不实现任何一步的细节。
+
+配置从 `store.cfg` 取：Store 就是用这份配置造出来的，两者不可能对不上。
 """
 
 from __future__ import annotations
 
 import json
 import time
-from pathlib import Path
 
 from .. import ingest
 from ..capabilities import ffmpeg
 from ..capabilities.llm import LLMClient
 from ..capabilities.speech import transcribe
 from ..clean import assign_idx, normalize_segments, text_to_segments
-from ..config import settings
 from ..contracts.builder import build_bundle
 from ..contracts.models import MediaMeta, SourceMeta
 from ..contracts.validation import validate_bundle
@@ -26,7 +26,6 @@ from ..handoff import export_handoff
 from ..ingest.classify import bundle_id_for
 from ..jobs.db import Store
 from ..jobs.finalize import finalize
-from ..jobs.layout import job_dir_name, job_path
 from ..jobs.stages import append_stage, read_stages
 from ..net.errors import DownloadFailure
 from ..render.save import save_report
@@ -62,6 +61,7 @@ class Stage:
 
     def __exit__(self, exc_type, exc, tb) -> None:
         append_stage(
+            self.store,
             self.job_id,
             {
                 "stage": self.name,
@@ -73,41 +73,45 @@ class Stage:
         return None
 
 
-def run_job(job_id: str, store: Store) -> None:
+def run_job(store: Store, job_id: str) -> None:
+    cfg = store.cfg
     job = store.get(job_id)
     if job is None:
         return
-    workdir = job_path(job_id, "")
+    workdir = store.job_path(job_id, "")
     workdir.mkdir(parents=True, exist_ok=True)
 
     try:
         with Stage(store, job_id, "ingest"):
             result = ingest.fetch(
-                job.input, workdir, progress=lambda p: store.update(job_id, progress=0.05 + 0.07 * p)
+                cfg,
+                job.input,
+                workdir,
+                progress=lambda p: store.update(job_id, progress=0.05 + 0.07 * p),
             )
             source: SourceMeta = result.source
             canonical = source.canonical_url or source.url or job.input
             bundle_id = bundle_id_for(canonical)
             write_json(
-                job_path(job_id, "source.json"),
+                store.job_path(job_id, "source.json"),
                 {"source": json.loads(source.model_dump_json()), "notes": result.notes},
             )
             store.update(
                 job_id, title=source.title, platform=source.platform, duration_sec=source.duration_sec
             )
         # 目录名要用标题，所以先算出最终名字（真正的改名在收尾时做）
-        final_dir = job_dir_name(store.get(job_id))
+        final_dir = store.dir_name(store.get(job_id))
 
         if result.media_file is not None:
             with Stage(store, job_id, "extract"):
-                wav = ffmpeg.to_wav(Path(result.media_file), job_path(job_id, "audio.wav"))
-                duration = ffmpeg.guard_duration(wav)
+                wav = ffmpeg.to_wav(cfg, result.media_file, store.job_path(job_id, "audio.wav"))
+                duration = ffmpeg.guard_duration(cfg, wav)
             with Stage(store, job_id, "asr"):
                 store.update(job_id, progress=0.22)
-                asr = transcribe(wav, language=source.lang_hint, duration=duration)
+                asr = transcribe(cfg, wav, language=source.lang_hint, duration=duration)
                 store.update(job_id, progress=0.58)
             with Stage(store, job_id, "normalize"):
-                cleaned = normalize_segments(asr.segments)
+                cleaned = normalize_segments(cfg, asr.segments)
             media = MediaMeta(
                 audio_path=f"jobs/{final_dir}/audio.wav",
                 audio_sha256=sha256_file(wav),
@@ -117,7 +121,7 @@ def run_job(job_id: str, store: Store) -> None:
             duration_sec = duration
         else:
             with Stage(store, job_id, "normalize"):
-                cleaned = text_to_segments(result.text or "")
+                cleaned = text_to_segments(cfg, result.text or "")
             media = None
             engine = source.extractor
             language = source.lang_hint or {
@@ -152,25 +156,26 @@ def run_job(job_id: str, store: Store) -> None:
             problems = validate_bundle(json.loads(bundle.model_dump_json()))
             if problems:
                 raise RuntimeError("契约校验失败：" + "; ".join(problems))
-            write_json(job_path(job_id, "transcript.json"), json.loads(bundle.model_dump_json()))
+            write_json(store.job_path(job_id, "transcript.json"), json.loads(bundle.model_dump_json()))
             store.update(job_id, chars=bundle.quality.chars)
             if duration_sec:
                 store.update(job_id, duration_sec=duration_sec)
 
-        client = LLMClient()
+        client = LLMClient(cfg)
         with Stage(store, job_id, "understand"):
-            report, run = build_report(bundle, client)
+            report, run = build_report(cfg, bundle, client)
             store.update(
                 job_id,
-                llm_model=settings.llm_model if client.available else None,
+                llm_model=cfg.llm_model if client.available else None,
                 degraded=0 if not report.degraded else 1,
                 cost_usd=client.stats.cost_usd,
             )
 
         with Stage(store, job_id, "report"):
-            write_json(job_path(job_id, "report.json"), json.loads(report.model_dump_json()))
+            write_json(store.job_path(job_id, "report.json"), json.loads(report.model_dump_json()))
             created = store.get(job_id)
             save_report(
+                store,
                 job_id,
                 bundle,
                 report,
@@ -182,24 +187,24 @@ def run_job(job_id: str, store: Store) -> None:
                 },
             )
             write_json(
-                job_path(job_id, "usage.json"),
+                store.job_path(job_id, "usage.json"),
                 {
                     "llm": client.stats.as_dict(),
                     "mode": run.mode,
                     "chunks": run.chunks,
                     "dir": final_dir,
-                    "stages": [s for s in read_stages(job_id) if s.get("stage") != "error"],
+                    "stages": [s for s in read_stages(store, job_id) if s.get("stage") != "error"],
                 },
             )
 
         if report.degraded:
             # 没有模型密钥时，把「理解」这一步交出去：导出可被外部 agent 直接消化的交接包
             with Stage(store, job_id, "handoff"):
-                export_handoff(job_id, bundle)
+                export_handoff(store, job_id, bundle)
         store.update(job_id, status="done", stage="done", progress=1.0)
     except Exception as exc:
         detail = str(exc) if isinstance(exc, DownloadFailure) else f"{type(exc).__name__}: {exc}"
-        append_stage(job_id, {"stage": "error", "error": detail})
+        append_stage(store, job_id, {"stage": "error", "error": detail})
         store.update(job_id, status="failed", error=detail)
         raise
     finally:

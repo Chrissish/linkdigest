@@ -11,18 +11,23 @@ from typing import Any
 
 import httpx
 
-from ...config import settings
+from ...config import Settings
 from .base import LLMError
 
 RETRYABLE = {429, 500, 502, 503, 504}
 
 
 class OpenAICompatibleTransport:
-    def __init__(self, base_url: str | None = None, api_key: str | None = None,
-                 timeout: float | None = None) -> None:
-        self.base_url = (base_url or settings.llm_base_url).rstrip("/")
-        self.api_key = api_key if api_key is not None else settings.llm_api_key
-        self.timeout = settings.llm_timeout if timeout is None else timeout
+    def __init__(
+        self,
+        cfg: Settings,
+        base_url: str | None = None,
+        api_key: str | None = None,
+        timeout: float | None = None,
+    ) -> None:
+        self.base_url = (base_url or cfg.llm_base_url).rstrip("/")
+        self.api_key = api_key if api_key is not None else cfg.llm_key()
+        self.timeout = cfg.llm_timeout if timeout is None else timeout
 
     @property
     def url(self) -> str:

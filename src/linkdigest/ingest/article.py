@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 
+from ..config import Settings
 from ..contracts.models import SourceMeta
 from ..net.http import get_text
 from .result import IngestResult
@@ -25,10 +26,10 @@ def extract_text(html: str, url: str | None = None) -> str:
     )
 
 
-def ingest(url: str) -> IngestResult:
+def ingest(cfg: Settings, url: str) -> IngestResult:
     import trafilatura
 
-    html = get_text(url)
+    html = get_text(cfg, url)
     extracted = trafilatura.extract(
         html,
         include_comments=False,

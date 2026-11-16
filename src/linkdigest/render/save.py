@@ -6,18 +6,25 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from ..contracts.models import Report, TranscriptBundle
-from ..jobs.layout import job_path
 from .html import render_html
 from .markdown import render_markdown
 
+if TYPE_CHECKING:
+    from ..jobs.db import Store
+
 
 def save_report(
-    job_id: str, bundle: TranscriptBundle, report: Report, extra: dict | None = None
+    store: "Store",
+    job_id: str,
+    bundle: TranscriptBundle,
+    report: Report,
+    extra: dict | None = None,
 ) -> tuple[Path, Path]:
-    md_path = job_path(job_id, "report.md")
+    md_path = store.job_path(job_id, "report.md")
     md_path.write_text(render_markdown(bundle, report, extra), encoding="utf-8")
-    html_path = job_path(job_id, "report.html")
+    html_path = store.job_path(job_id, "report.html")
     html_path.write_text(render_html(bundle, report, extra), encoding="utf-8")
     return md_path, html_path

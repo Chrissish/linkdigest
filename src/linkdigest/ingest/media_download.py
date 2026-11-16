@@ -11,7 +11,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Callable, Iterator
 
-from ..config import settings
+from ..config import Settings
 from ..contracts.models import SourceMeta
 from ..conventions.text import strip_ansi
 from ..net import cookies
@@ -59,7 +59,9 @@ def _clean_node_env() -> Iterator[None]:
             os.environ["NODE_OPTIONS"] = saved
 
 
-def _options(workdir: Path, logger: _YdlLogger, progress: Callable[[float], None] | None) -> dict:
+def _options(
+    cfg: Settings, workdir: Path, logger: _YdlLogger, progress: Callable[[float], None] | None
+) -> dict:
     def hook(payload: dict) -> None:
         if payload.get("status") == "downloading" and progress:
             total = payload.get("total_bytes") or payload.get("total_bytes_estimate") or 0
@@ -76,42 +78,44 @@ def _options(workdir: Path, logger: _YdlLogger, progress: Callable[[float], None
         "retries": 1,
         "fragment_retries": 1,
         "socket_timeout": 15,
-        "max_filesize": settings.max_download_mb * 1024 * 1024,
+        "max_filesize": cfg.max_download_mb * 1024 * 1024,
         "progress_hooks": [hook],
         "logger": logger,
     }
-    cookie_path = cookies.cookie_file()
+    cookie_path = cookies.cookie_file(cfg)
     if cookie_path:
         options["cookiefile"] = cookie_path
-    elif settings.cookies_from_browser:
-        options["cookiesfrombrowser"] = (settings.cookies_from_browser,)
+    elif cfg.cookies_from_browser:
+        options["cookiesfrombrowser"] = (cfg.cookies_from_browser,)
 
     # YouTube 的 n 挑战要在 JS 里跑：没有运行时，画质/音轨都拿不到，
     # 只返回一串 storyboard 封面图，然后报「Requested format is not available」。
-    if settings.js_runtime:
-        runtime = "deno" if "deno" in Path(settings.js_runtime).name else "node"
-        options["js_runtimes"] = {runtime: {"path": settings.js_runtime}}
+    if cfg.js_runtime:
+        runtime = "deno" if "deno" in Path(cfg.js_runtime).name else "node"
+        options["js_runtimes"] = {runtime: {"path": cfg.js_runtime}}
     return options
 
 
-def download(url: str, workdir: Path, progress: Callable[[float], None] | None = None) -> tuple[Path, dict]:
+def download(
+    cfg: Settings, url: str, workdir: Path, progress: Callable[[float], None] | None = None
+) -> tuple[Path, dict]:
     from yt_dlp import YoutubeDL
 
     # 先花几秒确认能不能连上：连不上就没必要让 yt-dlp 反复重试拖上几分钟。
-    probe = reachability(url, timeout=min(8.0, settings.fetch_timeout))
+    probe = reachability(cfg, url, timeout=min(8.0, cfg.fetch_timeout))
     if not probe.get("ok"):
         raise DownloadFailure(probe.get("error") or f"连不上 {probe.get('host')}")
 
     workdir.mkdir(parents=True, exist_ok=True)
     logger = _YdlLogger()
     try:
-        with _clean_node_env(), YoutubeDL(_options(workdir, logger, progress)) as ydl:
+        with _clean_node_env(), YoutubeDL(_options(cfg, workdir, logger, progress)) as ydl:
             info = ydl.extract_info(url, download=True)
     except Exception as exc:  # noqa: BLE001 - 统一转成可读原因
-        raise DownloadFailure(explain_error(exc, url)) from exc
+        raise DownloadFailure(explain_error(exc, url, cfg)) from exc
 
     if not info:
-        raise DownloadFailure(explain_error(logger.tail() or "解析结果为空", url))
+        raise DownloadFailure(explain_error(logger.tail() or "解析结果为空", url, cfg))
 
     candidates = [
         path
@@ -122,7 +126,7 @@ def download(url: str, workdir: Path, progress: Callable[[float], None] | None =
         extractor = info.get("extractor_key") or info.get("extractor") or "generic"
         formats = info.get("formats") or []
         detail = logger.tail() or f"解析器 {extractor} 返回了元数据但没有可下载格式（formats={len(formats)}）"
-        raise DownloadFailure(explain_error(detail, url) + f"〔解析器 {extractor}〕")
+        raise DownloadFailure(explain_error(detail, url, cfg) + f"〔解析器 {extractor}〕")
     if candidates[0].stat().st_size < 1024:
         raise DownloadFailure(
             f"只下到 {candidates[0].stat().st_size} 字节的占位文件，通常是平台返回了错误页或验证页。"
@@ -148,7 +152,7 @@ def source_meta(info: dict, url: str, platform: str, kind: str) -> SourceMeta:
     )
 
 
-def probe_extractor(url: str) -> dict:
+def probe_extractor(cfg: Settings, url: str) -> dict:
     """只解析不下载：诊断「这个链接为什么跑不动」时，看解析器认不认。"""
     from yt_dlp import YoutubeDL
 
@@ -164,7 +168,7 @@ def probe_extractor(url: str) -> dict:
             "has_formats": bool(info.get("formats")),
         }
     except Exception as exc:  # noqa: BLE001 - 诊断端点不该因为解析失败而 500
-        return {"extract_error": explain_error(exc, url)}
+        return {"extract_error": explain_error(exc, url, cfg)}
 
 
 __all__ = ["download", "probe_extractor", "source_meta"]

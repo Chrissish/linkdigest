@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Callable
 from urllib.parse import urlsplit
 
+from ..config import Settings
 from ..net.errors import DownloadFailure, explain_error
 from ..net.transfer import stream_to
 from . import article, feed, html_audio, local, media_download
@@ -25,7 +26,9 @@ from .podcast import resolver as podcast
 from .result import IngestResult
 
 
-def fetch(url: str, workdir: Path, progress: Callable[[float], None] | None = None) -> IngestResult:
+def fetch(
+    cfg: Settings, url: str, workdir: Path, progress: Callable[[float], None] | None = None
+) -> IngestResult:
     url = normalize_input(url)
     workdir.mkdir(parents=True, exist_ok=True)
 
@@ -38,30 +41,30 @@ def fetch(url: str, workdir: Path, progress: Callable[[float], None] | None = No
 
     # 播客平台单独一条路：页面给不出音轨，必须去原始 RSS 取。
     if platform in PODCAST_PLATFORMS:
-        return podcast.ingest(url, workdir, platform)
+        return podcast.ingest(cfg, url, workdir, platform)
 
     if platform == "wechat" or (platform == "generic" and not Path(urlsplit(url).path).suffix):
         try:
-            return article.ingest(url)
+            return article.ingest(cfg, url)
         except Exception as exc:  # noqa: BLE001 - 留作后面的合并报错
-            article_error = explain_error(exc, url)
+            article_error = explain_error(exc, url, cfg)
 
     if platform == "rss":
-        result = feed.ingest(url)
+        result = feed.ingest(cfg, url)
         audio_url = result.source.extra.get("audio_url")
-        result.media_file = stream_to(audio_url, workdir / f"source{audio_suffix(audio_url)}")
+        result.media_file = stream_to(cfg, audio_url, workdir / f"source{audio_suffix(audio_url)}")
         return result
 
-    scraped = html_audio.ingest(url) if platform in HTML_AUDIO_PLATFORMS else None
+    scraped = html_audio.ingest(cfg, url) if platform in HTML_AUDIO_PLATFORMS else None
     if scraped and scraped.source.extra.get("audio_url"):
         audio_url = scraped.source.extra["audio_url"]
-        scraped.media_file = stream_to(audio_url, workdir / f"source{audio_suffix(audio_url)}")
+        scraped.media_file = stream_to(cfg, audio_url, workdir / f"source{audio_suffix(audio_url)}")
         if article_error:
             scraped.notes.append(article_error)
         return scraped
 
     try:
-        media, info = media_download.download(url, workdir, progress)
+        media, info = media_download.download(cfg, url, workdir, progress)
     except DownloadFailure as exc:
         if article_error:
             raise DownloadFailure(f"{article_error}；按音视频解析也不成立：{exc}") from exc

@@ -4,17 +4,20 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from ..contracts.models import TranscriptBundle
 from ..conventions.timecode import ts
-from ..jobs.layout import job_dir
 from .brief import build_brief, required_schema, split_parts, transcript_lines
 from .paths import ANSWER, BRIEF, TEMPLATE, TRANSCRIPT_MD
 
+if TYPE_CHECKING:
+    from ..jobs.db import Store
 
-def export_handoff(job_id: str, bundle: TranscriptBundle) -> Path:
+
+def export_handoff(store: "Store", job_id: str, bundle: TranscriptBundle) -> Path:
     """写 handoff/ 目录，返回 answer.json 的期望路径。"""
-    directory = job_dir(job_id)
+    directory = store.job_dir(job_id)
     handoff_dir = directory / "handoff"
     handoff_dir.mkdir(parents=True, exist_ok=True)
 
