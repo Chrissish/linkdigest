@@ -8,10 +8,10 @@ from __future__ import annotations
 
 import json
 import re
+import sys
 from datetime import datetime
 from pathlib import Path
 
-from ..config.env import PROJECT_ROOT
 from ..contracts.models import TranscriptBundle
 from ..conventions.resources import text as resource_text
 from ..conventions.timecode import ts
@@ -96,14 +96,13 @@ def build_brief(bundle: TranscriptBundle, job_id: str, directory: Path) -> str:
     """自包含作业单：读它一个文件就能产出 answer.json。"""
     timeline = bundle.has_timeline
     parts = split_parts(transcript_lines(bundle))
-    python = PROJECT_ROOT / ".venv" / "bin" / "python"
-    python_cmd = str(python) if python.exists() else "python"
 
     values = {
         "title": bundle.source.title or "未命名内容",
         "answer_path": str(directory / ANSWER),
         "answer_name": ANSWER,
-        "run_command": f"cd {PROJECT_ROOT} && {python_cmd} -m linkdigest.cli {job_id} --apply",
+        # 用当前解释器，不假设仓库里的 .venv；配置与数据目录的解析也不依赖 cwd
+        "run_command": f"{sys.executable} -m linkdigest.cli {job_id} --apply",
         "meta_table": meta_table(bundle, job_id, directory),
         "parts_note": _parts_note(parts),
         "required_schema": json.dumps(required_schema(), ensure_ascii=False, indent=2),

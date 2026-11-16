@@ -11,7 +11,8 @@ from pathlib import Path
 from ..config.env import PROJECT_ROOT
 from .models import TranscriptBundle
 
-SCHEMA_PATH = PROJECT_ROOT / "schemas" / "transcript_bundle.schema.json"
+# 源码树里写回仓库的 schemas/；安装态没有仓库，落到当前目录，不往 site-packages 里写
+SCHEMA_PATH = (PROJECT_ROOT or Path.cwd()) / "schemas" / "transcript_bundle.schema.json"
 
 
 def validate_bundle(payload: dict) -> list[str]:

@@ -16,6 +16,21 @@
 - 去掉 import 副作用：代理写入环境变量改由 `bootstrap()` 显式执行。
 - 重复实现收敛：`ts()` / `_chapters_block` / `_to_report` 各只剩一份。
 
+### 修复
+
+- **已安装形态下配置读不到**：路径锚点原本按 `parents[3]` 硬算，`pip install` 后指向
+  `lib/python3.x`，`.env` 与 `data/` 都落到 Python 安装目录里。改为向上找 `pyproject.toml`
+  判定源码树，找不到就用操作系统标准目录；`.env` 按「当前目录 → 仓库根 → 用户配置目录」
+  顺序查找，并支持 `LINK_DIGEST_ENV` 指定。
+- **相对路径随 cwd 漂移**：`LINK_DIGEST_DATA=./data` 现在锚在 `.env` 所在目录，
+  从任何目录启动都指向同一份数据。
+- **错误配置被静默改写**：`ASR_MAX_SECONDS=4h` 这类坏值改为启动时提示一行并回落默认值。
+- **配置有两个来源**：`COOKIES_FILE` 原本绕过 `Settings` 直接读环境，现收进配置对象；
+  `pipeline_version` 改为取 `__version__`，不再两处各写一份。
+- **默认值不一致**：`ASR_MODEL` 的代码默认从 `large-v3` 对齐到 `.env.example` 的 `small`，
+  避免首次安装静默下载 1.5GB 模型。
+- **交接单的复跑命令写死 `.venv`**：改为当前解释器，并去掉对 `cd 仓库根` 的依赖。
+
 ### 计划中
 
 - 任务队列持久化：进程重启后能续跑未完成的任务

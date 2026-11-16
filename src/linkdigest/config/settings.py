@@ -3,6 +3,9 @@
 所有值来自环境变量或 .env，无外部配置中心；构造时一次性定下来，运行期不再重读，
 避免「服务跑着跑着出口变了」这类不可复现的问题。需要改配置就重启进程。
 
+默认路径分两种形态：源码树里落在仓库的 `data/`，安装后落到操作系统标准目录。
+判断见 `config.env`，这里只消费结果。
+
 唯一的环境副作用（把代理写进 HTTP_PROXY）不在构造时做，见 `linkdigest.bootstrap`：
 配置对象只描述「该用什么」，不替进程做决定。
 """
@@ -13,21 +16,37 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from .. import __version__
 from ..net.proxy import detect_system_proxy
-from .env import PROJECT_ROOT, env, env_float, env_int
+from .env import ENV_ANCHOR, PROJECT_ROOT, env, env_float, env_int, resolve_path, user_data_dir
 from .toolchain import find_ffmpeg, find_js_runtime
 
 SYSTEM_PROXY = detect_system_proxy()
 
 
+def _default_data_dir() -> Path:
+    raw = env("LINK_DIGEST_DATA")
+    if raw:
+        return resolve_path(raw, ENV_ANCHOR)
+    if PROJECT_ROOT is not None:
+        return PROJECT_ROOT / "data"
+    return user_data_dir()
+
+
+def _default_cookies_file() -> Path | None:
+    raw = env("COOKIES_FILE")
+    return resolve_path(raw, ENV_ANCHOR) if raw else None
+
+
 @dataclass(slots=True)
 class Settings:
-    data_dir: Path = field(default_factory=lambda: Path(env("LINK_DIGEST_DATA", str(PROJECT_ROOT / "data"))))
+    data_dir: Path = field(default_factory=_default_data_dir)
     ffmpeg: str | None = field(default_factory=find_ffmpeg)
     js_runtime: str | None = field(default_factory=find_js_runtime)
 
     asr_engine: str = field(default_factory=lambda: (env("ASR_ENGINE", "auto") or "auto").lower())
-    asr_model: str = field(default_factory=lambda: env("ASR_MODEL", "large-v3") or "large-v3")
+    # 与 .env.example 保持一致：先跑通 small（约 460MB），要质量再换 large-v3
+    asr_model: str = field(default_factory=lambda: env("ASR_MODEL", "small") or "small")
     asr_compute_type: str = field(default_factory=lambda: env("ASR_COMPUTE_TYPE", "int8") or "int8")
     asr_device: str = field(default_factory=lambda: env("ASR_DEVICE", "auto") or "auto")
     asr_max_seconds: int = field(default_factory=lambda: env_int("ASR_MAX_SECONDS", 4 * 3600))
@@ -46,14 +65,17 @@ class Settings:
     fetch_timeout: float = field(default_factory=lambda: env_float("FETCH_TIMEOUT", 30.0))
     max_download_mb: int = field(default_factory=lambda: env_int("MAX_DOWNLOAD_MB", 2048))
     cookies_from_browser: str | None = field(default_factory=lambda: env("COOKIES_FROM_BROWSER"))
+    # 自备 cookies.txt 的显式位置；留空则用 data_dir/cookies.txt
+    cookies_file: Path | None = field(default_factory=_default_cookies_file)
     # 实际生效的出口代理：PROXY_URL > shell 环境 > macOS 系统代理
     proxy: str | None = field(default_factory=lambda: _resolve_proxy())
     system_proxy: str | None = field(default_factory=lambda: SYSTEM_PROXY)
 
-    pipeline_version: str = "0.1.0"
+    pipeline_version: str = __version__
 
     def __post_init__(self) -> None:
-        # 相对路径按进程 cwd 解析成绝对路径，避免从别的目录启动时产物散落
+        # 默认值已按 .env 所在目录解析过；这里兜住显式传入的相对路径，统一成绝对路径，
+        # 避免从别的目录启动时产物散落（两者都是幂等的）
         self.data_dir = self.data_dir.expanduser().resolve()
 
     @property

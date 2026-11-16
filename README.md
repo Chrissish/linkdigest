@@ -106,6 +106,10 @@ python -m linkdigest.cli 412be41e --apply                          # 校验 → 
 
 全部通过环境变量或 `.env` 覆盖，无配置中心。完整清单见 `.env.example`。
 
+`.env` 的查找顺序是 **当前目录 → 仓库根 → 用户配置目录**（`~/Library/Application Support/linkdigest`
+等），取第一个存在的；要指到别处就设 `LINK_DIGEST_ENV` 的绝对路径。**相对路径锚在 `.env` 所在目录**，
+不随启动时的 cwd 变化，所以从任何目录启动都指向同一份数据。
+
 | 变量 | 作用 | 默认 |
 | --- | --- | --- |
 | `LLM_API_KEY` | 理解层密钥，留空则降级 | 空 |
@@ -116,6 +120,10 @@ python -m linkdigest.cli 412be41e --apply                          # 校验 → 
 | `COOKIES_FILE` / `COOKIES_FROM_BROWSER` | 登录态来源 | 空（默认读 `data/cookies.txt`） |
 | `PROXY_URL` | 钉死出口；留空则直连 → 环境变量 → 系统代理自动探测 | 空 |
 | `MAX_DOWNLOAD_MB` | 下载体积上限 | 2048 |
+| `LINK_DIGEST_DATA` | 任务产物目录 | 源码树 `data/`，安装后用户数据目录 |
+| `LINK_DIGEST_ENV` | 指定 `.env` 的绝对路径 | 空（按上面的顺序找） |
+
+配错类型不会静默吞掉：`ASR_MAX_SECONDS=4h` 这类值会在启动时打一行提示并回落默认值。
 
 ASR 引擎默认 `auto`：装了 `faster-whisper` 就用它，Apple Silicon 上装 `mlx-whisper` 会更快。
 OCR 与 mlx 都是可选依赖：

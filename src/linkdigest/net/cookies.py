@@ -7,7 +7,6 @@
 from __future__ import annotations
 
 import http.cookiejar
-import os
 import re
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -36,10 +35,10 @@ VISITOR_ONLY = (
 
 
 def cookie_file() -> str | None:
-    """支持用户自备 cookies.txt（难啃平台必需）。"""
-    candidate = os.getenv("COOKIES_FILE")
-    if candidate and Path(candidate).exists():
-        return candidate
+    """用户自备的 cookies.txt 优先（难啃平台必需），否则用数据目录里那份。"""
+    configured = settings.cookies_file
+    if configured is not None and configured.exists():
+        return str(configured)
     default = settings.cookies_path
     return str(default) if default.exists() else None
 

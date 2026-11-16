@@ -68,7 +68,7 @@ class _Context(Mapping[str, str]):
         }
         self._providers: dict[str, Callable[[], str]] = {
             "runtime": lambda: settings.js_runtime or "未检测到",
-            "cookies_path": lambda: str(settings.cookies_path),
+            "cookies_path": lambda: str(settings.cookies_file or settings.cookies_path),
             "cookies_state": self._cookies_state,
         }
         self._computed: dict[str, str] = {}
@@ -96,4 +96,4 @@ class _Context(Mapping[str, str]):
         info = _cookies()
         if info.get("present"):
             return f"\n当前 {info.get('path')}：{info.get('hint') or '没有可用的登录态。'}"
-        return f"\n当前没有 cookies.txt（期望位置 {settings.cookies_path}）。"
+        return f"\n当前没有 cookies.txt（期望位置 {settings.cookies_file or settings.cookies_path}）。"

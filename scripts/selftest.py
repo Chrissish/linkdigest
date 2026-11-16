@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import sys
 import tempfile
@@ -201,9 +202,50 @@ check("zh_TW → zh", normalize_language("zh_TW"), "zh")
 check("空值不猜", normalize_language(""), None)
 check("未知码交给检测", normalize_language("klingon"), None)
 
-print("[jobs + handoff]")
+print("[config + paths]")
+from linkdigest import __version__  # noqa: E402
 from linkdigest.config import settings  # noqa: E402
+from linkdigest.config.env import (  # noqa: E402
+    PROJECT_ROOT,
+    env_float,
+    env_int,
+    find_project_root,
+    resolve_path,
+    user_data_dir,
+)
+from linkdigest.config.settings import Settings  # noqa: E402
 
+check_true(
+    "源码树能认出仓库根",
+    PROJECT_ROOT is not None and (PROJECT_ROOT / "pyproject.toml").is_file(),
+    str(PROJECT_ROOT),
+)
+# 模拟 pip 安装后的布局：site-packages 层级里没有 pyproject.toml
+fake_sp = Path(tempfile.mkdtemp(prefix="linkdigest-sp-"))
+fake_pkg = fake_sp / "lib" / "python3.12" / "site-packages" / "linkdigest" / "config"
+fake_pkg.mkdir(parents=True)
+check("安装态认不出仓库根", find_project_root(fake_pkg), None)
+check_true("安装态数据目录落在用户目录", user_data_dir().name == "linkdigest", str(user_data_dir()))
+
+anchor = Path(tempfile.mkdtemp(prefix="linkdigest-anchor-"))
+check("相对路径锚在给定目录", resolve_path("./data", anchor), (anchor / "data").resolve())
+# macOS 的 /tmp 是 /private/tmp 的符号链接，resolve() 会展开，所以右边也要 resolve
+check("绝对路径原样保留", resolve_path("/var/tmp/x", anchor), Path("/var/tmp/x").resolve())
+
+os.environ["LINK_DIGEST_SELFTEST_INT"] = "4h"
+os.environ["LINK_DIGEST_SELFTEST_FLOAT"] = "abc"
+check("坏整数回落默认", env_int("LINK_DIGEST_SELFTEST_INT", 7), 7)
+check("坏小数回落默认", env_float("LINK_DIGEST_SELFTEST_FLOAT", 0.5), 0.5)
+del os.environ["LINK_DIGEST_SELFTEST_INT"]
+del os.environ["LINK_DIGEST_SELFTEST_FLOAT"]
+
+os.environ["COOKIES_FILE"] = "/tmp/ck-probe.txt"
+check("COOKIES_FILE 收进 Settings", Settings().cookies_file, Path("/tmp/ck-probe.txt").resolve())
+del os.environ["COOKIES_FILE"]
+check("版本号只有一处定义", settings.pipeline_version, __version__)
+check("默认 ASR 模型与示例一致", Settings().asr_model, "small")
+
+print("[jobs + handoff]")
 settings.data_dir = Path(tempfile.mkdtemp(prefix="linkdigest-selftest-"))
 store = Store()
 job = store.create_job("https://www.youtube.com/watch?v=abcdefghijk", "url")
