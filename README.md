@@ -28,7 +28,7 @@
 需要 Python ≥ 3.10 和 ffmpeg（`FFMPEG_BIN` 可指定路径）。
 
 ```bash
-git clone <repo-url> && cd linkdigest
+git clone https://github.com/Chrissish/linkdigest.git && cd linkdigest
 ./scripts/setup.sh          # 建 venv、装依赖（可重复执行）
 cp .env.example .env        # 填 LLM_API_KEY；不填也能跑，报告降级为抽取式
 
