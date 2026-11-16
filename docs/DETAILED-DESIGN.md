@@ -161,8 +161,8 @@ CREATE TABLE jobs (
 | 现象 | 原因 | 对策 |
 | --- | --- | --- |
 | `open() got an unexpected keyword argument 'metadata_errors'` | PyAV 19 移除了该参数，faster-whisper 1.2.x 仍在传 | 不传文件路径，自己读 PCM 成 `np.ndarray` 喂模型（`asr._load_pcm`） |
-| `pip install -e .` 报 `EEXIST: mkdir ...tmp...` | pip 在自定义 TMPDIR 下建临时目录冲突 | 不做 editable 安装，往 site-packages 写 `linkdigest.pth` 指向 `src`（`setup.sh` 已内置） |
-| `No module named 'setuptools'` | Python ≥3.12 的 venv 默认不带 setuptools | setup.sh 先装 setuptools/wheel |
+| `pip install -e .` 报 `EEXIST: mkdir ...tmp...` | pip 在自定义 TMPDIR 下建临时目录冲突 | 不做 editable 安装，往 site-packages 写 `linkdigest.pth` 指向 `src`（`scripts/setup.sh` 已内置） |
+| `No module named 'setuptools'` | Python ≥3.12 的 venv 默认不带 setuptools | `scripts/setup.sh` 先装 setuptools/wheel |
 | `Form data requires "python-multipart"` | FastAPI 的 UploadFile 依赖 | 已加入依赖清单，别漏 |
 | `paddlepaddle` 装不上 | 无 cp313 wheel | OCR 用 `rapidocr`（onnxruntime），或退到 Python 3.11 |
 | PyPI 慢到超时 | 直连 pypi.org 常 5-10s/请求 | 走清华镜像 `-i https://pypi.tuna.tsinghua.edu.cn/simple` |

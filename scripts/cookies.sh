@@ -10,7 +10,7 @@ cd "$(dirname "$0")/.."
 
 PY=".venv/bin/python"
 if [ ! -x "$PY" ]; then
-  echo "找不到 $PY —— 先跑 ./setup.sh 建虚拟环境。" >&2
+  echo "找不到 $PY —— 先跑 ./scripts/setup.sh 建虚拟环境。" >&2
   exit 1
 fi
 

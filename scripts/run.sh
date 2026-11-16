@@ -1,7 +1,12 @@
 #!/usr/bin/env bash
 # 启动网页服务（默认自动打开浏览器；NO_OPEN=1 可关闭）
+#
+#   ./scripts/run.sh                 # 起服务并打开 http://127.0.0.1:8787/
+#   NO_OPEN=1 ./scripts/run.sh       # 只起服务
+#   PORT=9000 ./scripts/run.sh       # 换端口
 set -euo pipefail
-cd "$(dirname "$0")"
+# 脚本在 scripts/ 下，工作目录要回到仓库根（.venv 与包都在根上）
+cd "$(dirname "$0")/.."
 PORT="${PORT:-8787}"
 URL="http://127.0.0.1:${PORT}/"
 

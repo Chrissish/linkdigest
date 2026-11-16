@@ -15,9 +15,9 @@
 `ERR_FILE_NOT_FOUND`，`/api/*` 同样不存在，点「生成总结」自然毫无反应。
 
 ```bash
-./run.sh                    # 起服务，并自动打开 http://127.0.0.1:8787/
-NO_OPEN=1 ./run.sh          # 只想起服务，不开浏览器
-PORT=9000 ./run.sh          # 换端口
+./scripts/run.sh                    # 起服务，并自动打开 http://127.0.0.1:8787/
+NO_OPEN=1 ./scripts/run.sh          # 只想起服务，不开浏览器
+PORT=9000 ./scripts/run.sh          # 换端口
 ```
 
 页面顶部出现「后端未连接」黄条，说明前端活着但请求没到服务；

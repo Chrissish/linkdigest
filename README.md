@@ -29,7 +29,7 @@
 
 ```bash
 git clone <repo-url> && cd linkdigest
-./setup.sh                  # 建 venv、装依赖（可重复执行）
+./scripts/setup.sh          # 建 venv、装依赖（可重复执行）
 cp .env.example .env        # 填 LLM_API_KEY；不填也能跑，报告降级为抽取式
 
 # 命令行
@@ -37,7 +37,7 @@ cp .env.example .env        # 填 LLM_API_KEY；不填也能跑，报告降级�
 .venv/bin/python -m linkdigest.cli ./lecture.m4a --show
 
 # 网页
-./run.sh                    # http://127.0.0.1:8787
+./scripts/run.sh            # http://127.0.0.1:8787
 ```
 
 首次运行会下载 Whisper 模型（默认 `small`，约 460MB；`large-v3` 是 1.5GB，慢 3-5 倍但准得多）。
@@ -142,6 +142,19 @@ pip install -e ".[mlx]"      # Apple Silicon 加速
 - 取舍细节与待办：[docs/DETAILED-DESIGN.md](docs/DETAILED-DESIGN.md)
 - 契约定义：[schemas/transcript_bundle.schema.json](schemas/transcript_bundle.schema.json)
 
+### 目录
+
+```
+src/linkdigest/   管道本体（采集 → ASR → 契约 → 理解 → 报告）
+web/              网页界面（单页，由 API 直接托管）
+scripts/          安装/启动、cookies 工具、自检与重渲染等运维脚本
+schemas/          契约 JSON Schema
+docs/             架构、排错、cookies、报告格式
+tests/fixtures/   回归样本（真实产物快照，不含音视频）
+samples/          自检用的样例输入
+data/             运行时产出（已 gitignore）
+```
+
 ## 常见问题
 
 | 症状 | 去哪看 |
@@ -168,8 +181,11 @@ pip install -e ".[mlx]"      # Apple Silicon 加速
 
 ## 参与贡献
 
-欢迎 issue 和 PR，尤其是「某平台又坏了」这类实测反馈。开发约定、自检方式、提交规范见
-[CONTRIBUTING.md](CONTRIBUTING.md)。
+欢迎 issue 和 PR，尤其是「某平台又坏了」这类实测反馈。改动前先跑一遍自检：
+
+```bash
+.venv/bin/python scripts/selftest.py     # 只碰确定性层，不需要网络与模型密钥
+```
 
 ## License
 

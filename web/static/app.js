@@ -31,8 +31,8 @@ let timer = null;
 let currentJob = null;
 
 const OFFLINE_HINT = location.protocol === "file:"
-  ? "页面是用 file:// 打开的，后端根本没在跑。先 cd linkdigest && ./run.sh，再访问 http://127.0.0.1:8787/"
-  : `连不上后端 ${location.origin}。确认服务还活着：cd linkdigest && ./run.sh（默认 127.0.0.1:8787）`;
+  ? "页面是用 file:// 打开的，后端根本没在跑。先 cd linkdigest && ./scripts/run.sh，再访问 http://127.0.0.1:8787/"
+  : `连不上后端 ${location.origin}。确认服务还活着：cd linkdigest && ./scripts/run.sh（默认 127.0.0.1:8787）`;
 
 async function api(path, options) {
   let res;

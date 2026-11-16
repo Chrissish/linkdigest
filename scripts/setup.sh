@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 # 一次装好环境。可重复执行。
 #
-#   ./setup.sh                                                       # 官方 PyPI
-#   PIP_INDEX=https://pypi.tuna.tsinghua.edu.cn/simple ./setup.sh     # 国内镜像
-#   PYTHON=python3.11 ./setup.sh                                      # 指定解释器
+#   ./scripts/setup.sh                                                    # 官方 PyPI
+#   PIP_INDEX=https://pypi.tuna.tsinghua.edu.cn/simple ./scripts/setup.sh  # 国内镜像
+#   PYTHON=python3.11 ./scripts/setup.sh                                   # 指定解释器
 set -euo pipefail
-cd "$(dirname "$0")"
+# 脚本在 scripts/ 下，工作目录要回到仓库根（venv、pyproject、.env 都在根上）
+cd "$(dirname "$0")/.."
 
 PY="${PYTHON:-python3}"
 INDEX="${PIP_INDEX:-}"
@@ -35,4 +36,4 @@ fi
 echo
 echo "下一步："
 echo "  1. 编辑 .env 填 LLM_API_KEY（不填也能跑，走降级模式）"
-echo "  2. ./run.sh  启动网页  http://127.0.0.1:8787"
+echo "  2. ./scripts/run.sh  启动网页  http://127.0.0.1:8787"
