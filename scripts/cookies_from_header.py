@@ -122,7 +122,7 @@ def main() -> int:
 
     out.write_text(to_netscape(pairs, kept), encoding="utf-8")
 
-    from linkdigest.sources import cookies_summary
+    from linkdigest.net.cookies import summary as cookies_summary
 
     info = cookies_summary(out)
     print(f"写入 {len(pairs)} 个 cookie（保留其他站点 {len(kept)} 条）→ {out}")
@@ -140,7 +140,8 @@ def main() -> int:
         print("\n✅ 已写入。cookies 每次采集现读，直接重试链接即可，不用重启服务。")
         return 0
 
-    from linkdigest.sources import login_state, reachability
+    from linkdigest.net.cookies import login_state
+    from linkdigest.net.probe import reachability
 
     print("\n联网校验（拿这份 cookies 打一次 youtube.com 看服务端认不认）…")
     reachability("https://www.youtube.com/", timeout=8.0)

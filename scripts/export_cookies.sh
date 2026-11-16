@@ -116,7 +116,7 @@ echo
 echo "[2/3] 校验 ${OUT} 是否含登录态"
 "${PY}" - <<'PY'
 import json
-from linkdigest.sources import cookies_summary
+from linkdigest.net.cookies import summary as cookies_summary
 
 info = cookies_summary()
 print(json.dumps(info, ensure_ascii=False, indent=2))

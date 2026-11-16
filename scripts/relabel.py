@@ -17,16 +17,12 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from linkdigest.config import settings  # noqa: E402
+from linkdigest.contracts.models import TranscriptBundle  # noqa: E402
+from linkdigest.conventions.jsonio import read_json, write_json  # noqa: E402
 from linkdigest.handoff import BRIEF, export_handoff  # noqa: E402
-from linkdigest.models import TranscriptBundle  # noqa: E402
-from linkdigest.store import (  # noqa: E402
-    Store,
-    job_dir,
-    job_dir_name,
-    job_path,
-    read_json,
-    write_json,
-)
+from linkdigest.jobs.db import Store  # noqa: E402
+from linkdigest.jobs.finalize import finalize  # noqa: E402
+from linkdigest.jobs.layout import job_dir, job_dir_name, job_path  # noqa: E402
 
 
 def main() -> int:
@@ -42,7 +38,7 @@ def main() -> int:
 
     for job in jobs:
         before = job_dir(job.id).name
-        after = job_dir_name(job) if not args.write else store.finalize_dir(job.id).name
+        after = job_dir_name(job) if not args.write else finalize(store, job.id).name
         if before != after:
             renamed += 1
             print(f"· {before}\n  → {after}")

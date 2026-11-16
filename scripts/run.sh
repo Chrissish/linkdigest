@@ -20,5 +20,5 @@ if [[ "${NO_OPEN:-0}" != "1" ]] && command -v open >/dev/null 2>&1; then
   ) &
 fi
 
-echo "[linkdigest] 界面 ${URL}  —— 别直接双击 web/index.html 打开"
+echo "[linkdigest] 界面 ${URL}  —— 别直接双击 src/linkdigest/resources/web/index.html 打开"
 exec .venv/bin/python -m uvicorn linkdigest.api:app --host 127.0.0.1 --port "$PORT" "$@"
