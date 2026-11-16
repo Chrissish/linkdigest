@@ -1,0 +1,19 @@
+{
+  "source": {
+    "kind": "article",
+    "platform": "generic",
+    "url": "http://127.0.0.1:8901/demo_zh.aiff",
+    "canonical_url": "http://127.0.0.1:8901/demo_zh.aiff",
+    "title": "demo_zh",
+    "author": null,
+    "published_at": "20261116",
+    "duration_sec": null,
+    "lang_hint": null,
+    "extractor": "yt-dlp/Generic",
+    "extra": {
+      "thumbnail": null,
+      "view_count": null
+    }
+  },
+  "notes": []
+}

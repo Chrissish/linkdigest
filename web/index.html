@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LinkDigest · 内容总结</title>
+<link rel="stylesheet" href="static/style.css">
+<style>
+  /* 直接双击打开（file://）时的兜底提示：此时静态资源与接口都不存在 */
+  #offline { display: none; }
+  html[data-mode="offline"] #offline {
+    display: block;
+    max-width: 720px;
+    margin: 12vh auto;
+    padding: 32px 36px;
+    background: #14161a;
+    border: 1px solid #2a2f36;
+    border-radius: 14px;
+    color: #e6e8eb;
+    font: 15px/1.7 -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  html[data-mode="offline"] body > *:not(#offline) { display: none !important; }
+  html[data-mode="offline"] body { background: #0d0f12; }
+  #offline h1 { margin: 0 0 10px; font-size: 20px; }
+  #offline p { margin: 0 0 12px; color: #a8b0ba; }
+  #offline code {
+    display: block;
+    padding: 10px 12px;
+    margin: 6px 0;
+    background: #0b0d10;
+    border: 1px solid #2a2f36;
+    border-radius: 8px;
+    color: #9ae6b4;
+    font: 13px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  #offline a { color: #7cc4ff; }
+</style>
+<script>
+  // 必须在解析 body 前判断，避免先闪一下坏掉的界面
+  if (location.protocol === "file:") document.documentElement.dataset.mode = "offline";
+</script>
+</head>
+<body>
+<section id="offline">
+  <h1>打开方式不对</h1>
+  <p>这个页面是 <code style="display:inline;padding:2px 6px">file://</code> 打开的静态文件，
+    它身后的后端（解析、转写、模型）一个都没在跑，所以点「生成总结」只会报资源找不到。</p>
+  <p>正确做法是从项目根目录把服务拉起来，然后用 HTTP 地址访问：</p>
+  <code>cd linkdigest &amp;&amp; ./run.sh</code>
+  <code>open http://127.0.0.1:8787</code>
+  <p>服务起好后点这里：<a href="http://127.0.0.1:8787/">http://127.0.0.1:8787/</a></p>
+</section>
+<header class="top">
+  <div class="brand">
+    <span class="mark"></span>
+    <span class="name">LinkDigest</span>
+    <span class="ver">v0.1</span>
+  </div>
+  <div class="pills" id="pills"></div>
+</header>
+
+<main>
+  <section class="composer">
+    <form id="form" autocomplete="off">
+      <input id="url" type="text" placeholder="粘贴视频 / 播客 / 文章链接，或选择本地文件" spellcheck="false">
+      <button type="submit" id="go">生成总结</button>
+      <label class="ghost" for="file">上传文件</label>
+      <input id="file" type="file" accept="audio/*,video/*" hidden>
+    </form>
+    <p class="hint">
+      视频与音频同路：只抽音轨做 ASR，不抓帧、不做画面理解。图文源走正文抽取 + 可选 OCR。
+    </p>
+  </section>
+
+  <section id="empty" class="empty">
+    <div class="empty-grid">
+      <div class="empty-card">
+        <span class="k">01</span>
+        <h4>贴链接</h4>
+        <p>视频、播客、文章都行。视频只取音轨，不做画面理解。</p>
+      </div>
+      <div class="empty-card">
+        <span class="k">02</span>
+        <h4>等转写</h4>
+        <p>本地全开源管道：ffmpeg 抽音轨 → Whisper 转写 → 规则清洗。</p>
+      </div>
+      <div class="empty-card">
+        <span class="k">03</span>
+        <h4>读报告</h4>
+        <p>分段解读、数据点、原话，全部带时间码可回查。</p>
+      </div>
+    </div>
+    <div class="examples">
+      <span>试试：</span>
+      <button class="example" data-tip="https://www.bilibili.com/video/BV1GJ411x7h7">B站视频链接</button>
+      <button class="example" data-tip="https://mp.weixin.qq.com/s/xxxxxxxx">公众号文章</button>
+      <button class="example" data-tip="https://feeds.simplecast.com/54nAGcIl">播客 RSS</button>
+    </div>
+  </section>
+
+  <section id="status" class="status" hidden>
+    <div class="status-head">
+      <span id="stage">排队</span>
+      <span id="pct">0%</span>
+    </div>
+    <div class="bar"><i id="fill"></i></div>
+    <ul id="timings" class="timings"></ul>
+  </section>
+
+  <section id="history" class="history" hidden>
+    <h3>最近</h3>
+    <div id="history-list" class="chips"></div>
+  </section>
+
+  <article id="report" class="report"></article>
+</main>
+
+<script src="static/app.js"></script>
+</body>
+</html>

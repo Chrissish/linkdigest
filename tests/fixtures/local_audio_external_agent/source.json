@@ -1,0 +1,18 @@
+{
+  "source": {
+    "kind": "local",
+    "platform": "local",
+    "url": null,
+    "canonical_url": null,
+    "title": "demo_zh",
+    "author": null,
+    "published_at": null,
+    "duration_sec": null,
+    "lang_hint": null,
+    "extractor": "filesystem",
+    "extra": {
+      "filename": "demo_zh.aiff"
+    }
+  },
+  "notes": []
+}

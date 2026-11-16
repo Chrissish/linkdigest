@@ -1,0 +1,25 @@
+{
+  "id": "1ad743dd0aa1",
+  "dir": "20261116-2227_local_demo-zh_1ad743dd0aa1",
+  "input": "samples/demo_zh.aiff",
+  "title": "demo_zh",
+  "platform": "local",
+  "url": null,
+  "status": "done",
+  "chars": 421,
+  "duration_sec": 96.434125,
+  "llm_model": "external-agent",
+  "degraded": false,
+  "created_at": "2026-11-16T14:27:38+00:00",
+  "artifacts": [
+    "audio.wav",
+    "manifest.json",
+    "report.html",
+    "report.json",
+    "report.md",
+    "source.json",
+    "stages.jsonl",
+    "transcript.json",
+    "usage.json"
+  ]
+}

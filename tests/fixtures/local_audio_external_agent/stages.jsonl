@@ -1,0 +1,7 @@
+{"ts": "2026-11-16T14:27:38+00:00", "stage": "ingest", "seconds": 0.01, "ok": true}
+{"ts": "2026-11-16T14:27:38+00:00", "stage": "extract", "seconds": 0.07, "ok": true}
+{"ts": "2026-11-16T14:27:53+00:00", "stage": "asr", "seconds": 14.76, "ok": true}
+{"ts": "2026-11-16T14:27:53+00:00", "stage": "normalize", "seconds": 0.0, "ok": true}
+{"ts": "2026-11-16T14:27:53+00:00", "stage": "bundle", "seconds": 0.01, "ok": true}
+{"ts": "2026-11-16T14:27:53+00:00", "stage": "understand", "seconds": 0.0, "ok": true}
+{"ts": "2026-11-16T14:27:53+00:00", "stage": "report", "seconds": 0.01, "ok": true}

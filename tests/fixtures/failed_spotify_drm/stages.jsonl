@@ -1,0 +1,2 @@
+{"ts": "2026-11-16T17:12:19+00:00", "stage": "ingest", "seconds": 19.51, "ok": false, "error": "采集失败：正文抽取为空（可能需要 cookie 或页面为反爬壳）；按音视频解析也不成立：采集失败：ERROR: [DRM] The requested site is known to use DRM protection. It will NOT be supported."}
+{"ts": "2026-11-16T17:12:19+00:00", "stage": "error", "error": "采集失败：正文抽取为空（可能需要 cookie 或页面为反爬壳）；按音视频解析也不成立：采集失败：ERROR: [DRM] The requested site is known to use DRM protection. It will NOT be supported."}

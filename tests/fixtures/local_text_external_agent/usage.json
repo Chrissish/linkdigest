@@ -1,0 +1,41 @@
+{
+  "llm": {
+    "calls": 0,
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "seconds": 0.0,
+    "cost_usd": 0.0,
+    "errors": []
+  },
+  "mode": "external",
+  "stages": [
+    {
+      "ts": "2026-11-16T11:02:45+00:00",
+      "stage": "ingest",
+      "seconds": 0.0,
+      "ok": true
+    },
+    {
+      "ts": "2026-11-16T11:02:45+00:00",
+      "stage": "normalize",
+      "seconds": 0.0,
+      "ok": true
+    },
+    {
+      "ts": "2026-11-16T11:02:45+00:00",
+      "stage": "bundle",
+      "seconds": 0.0,
+      "ok": true
+    },
+    {
+      "ts": "2026-11-16T11:02:45+00:00",
+      "stage": "understand",
+      "seconds": 0.0,
+      "ok": true
+    }
+  ],
+  "external": {
+    "by": "external-agent",
+    "at": "2026-11-17T00:23:25+08:00"
+  }
+}

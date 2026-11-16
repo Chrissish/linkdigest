@@ -1,0 +1,56 @@
+{
+  "bundle_version": "1.0",
+  "id": "fe1c7da27316d54a",
+  "source": {
+    "kind": "article",
+    "platform": "local",
+    "url": null,
+    "canonical_url": null,
+    "title": "demo_zh",
+    "author": null,
+    "published_at": null,
+    "duration_sec": null,
+    "lang_hint": null,
+    "extractor": "filesystem-text",
+    "extra": {
+      "filename": "demo_zh.txt"
+    }
+  },
+  "media": null,
+  "language": {
+    "detected": "zh",
+    "probability": 1.0,
+    "script": "cjk"
+  },
+  "segments": [
+    {
+      "idx": 0,
+      "start": 0.0,
+      "end": 1.0,
+      "text": "今天我们聊一个反直觉的结论。过去两年,很多团队在做视频内容理解的时候,第一反应都是抽帧,然后用视觉模型去描述画面。但我们做了六个月的实验之后,把这个方案整个砍掉了。原因有三个。第一,成本。一小时的视频,如果每秒抽一帧,就是三千六百张图,视觉推理的开销是语音识别的五到十倍。第二,收益。我们统计了两百条内容,真正只存在于画面、语音里完全没有的信息,占比不到百分之八,而且几乎全部集中在两类,一类是屏幕录制,一类是图表讲解。第三,工程复杂度。抽帧要处理场景切换、关键帧去重、时间轴对齐,每一个环节都会引入新的失败模式。所以我们的结论是,先把语音链路做到极致,再考虑画面。语音链路的核心不是模型,是文本校验。转录错误不会自己消失,必须在落盘之前用确定性规则压掉。重复、幻觉、时间戳倒挂,这三类问题占了全部错误的八成以上,而且全部可以用规则解决。最后一点,报告的价值不在文采,在于可核对。每一个结论后面都应该有一个时间码,让人能在三十秒内回到原片确认。",
+      "speaker": null,
+      "confidence": null,
+      "flags": [
+        "para_index"
+      ]
+    }
+  ],
+  "chapters": [
+    {
+      "title": "第 1 节",
+      "start": 0.0,
+      "end": 1.0,
+      "summary": null
+    }
+  ],
+  "quality": {
+    "asr_engine": "filesystem-text",
+    "segment_count": 1,
+    "chars": 422,
+    "avg_confidence": null,
+    "distinct_speakers": null,
+    "flags": {},
+    "warnings": []
+  },
+  "created_at": "2026-11-16T11:02:45+00:00"
+}

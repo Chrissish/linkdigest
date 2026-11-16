@@ -1,0 +1,20 @@
+{
+  "source": {
+    "kind": "article",
+    "platform": "local",
+    "url": null,
+    "canonical_url": null,
+    "title": "demo_zh",
+    "author": null,
+    "published_at": null,
+    "duration_sec": null,
+    "lang_hint": null,
+    "extractor": "filesystem-text",
+    "extra": {
+      "filename": "demo_zh.txt"
+    }
+  },
+  "notes": [
+    "本地文本直接进管道"
+  ]
+}

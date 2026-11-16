@@ -1,0 +1,25 @@
+{
+  "id": "43100a5d5593",
+  "dir": "20261116-2215_generic_demo-zh_43100a5d5593",
+  "input": "http://127.0.0.1:8901/demo_zh.aiff",
+  "title": "demo_zh",
+  "platform": "generic",
+  "url": "http://127.0.0.1:8901/demo_zh.aiff",
+  "status": "done",
+  "chars": 421,
+  "duration_sec": 96.434125,
+  "llm_model": null,
+  "degraded": true,
+  "created_at": "2026-11-16T14:15:01+00:00",
+  "artifacts": [
+    "audio.wav",
+    "manifest.json",
+    "report.json",
+    "report.md",
+    "source.aiff",
+    "source.json",
+    "stages.jsonl",
+    "transcript.json",
+    "usage.json"
+  ]
+}

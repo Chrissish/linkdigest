@@ -1,0 +1,17 @@
+{
+  "id": "d2e54ea12193",
+  "dir": "20261117-0058_unknown_youtube-te2IJ1w1LUI_d2e54ea12193",
+  "input": "https://www.youtube.com/watch?v=te2IJ1w1LUI",
+  "title": null,
+  "platform": null,
+  "url": "https://www.youtube.com/watch?v=te2IJ1w1LUI",
+  "status": "failed",
+  "chars": null,
+  "duration_sec": null,
+  "llm_model": null,
+  "degraded": false,
+  "created_at": "2026-11-16T16:58:01+00:00",
+  "artifacts": [
+    "stages.jsonl"
+  ]
+}

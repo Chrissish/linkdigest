@@ -1,0 +1,2 @@
+来源任务目录：data/jobs/20261117-0058_unknown_youtube-te2IJ1w1LUI_d2e54ea12193
+只保留产物（manifest/transcript/report/source/usage/stages + handoff），不含音视频。

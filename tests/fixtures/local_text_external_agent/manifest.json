@@ -1,0 +1,24 @@
+{
+  "id": "73372807cf23",
+  "dir": "20261116-1902_local_demo-zh_73372807cf23",
+  "input": "samples/demo_zh.txt",
+  "title": "demo_zh",
+  "platform": "local",
+  "url": null,
+  "status": "done",
+  "chars": 422,
+  "duration_sec": null,
+  "llm_model": "external-agent",
+  "degraded": false,
+  "created_at": "2026-11-16T11:02:45+00:00",
+  "artifacts": [
+    "manifest.json",
+    "report.html",
+    "report.json",
+    "report.md",
+    "source.json",
+    "stages.jsonl",
+    "transcript.json",
+    "usage.json"
+  ]
+}

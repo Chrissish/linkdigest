@@ -1,0 +1,108 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://linkdigest.local/schemas/transcript_bundle.schema.json",
+  "title": "TranscriptBundle",
+  "description": "确定性管道向智能层交付的唯一契约。上游全开源可复现，下游模型可替换。",
+  "type": "object",
+  "required": ["bundle_version", "id", "source", "language", "segments", "quality", "created_at"],
+  "additionalProperties": false,
+  "properties": {
+    "bundle_version": { "const": "1.0" },
+    "id": {
+      "type": "string",
+      "description": "内容寻址 ID：source canonical_url 或音频 sha256 的 sha256 前 16 位"
+    },
+    "source": { "$ref": "#/$defs/source" },
+    "media": { "$ref": "#/$defs/media" },
+    "language": { "$ref": "#/$defs/language" },
+    "segments": { "type": "array", "items": { "$ref": "#/$defs/segment" } },
+    "chapters": { "type": "array", "items": { "$ref": "#/$defs/chapter" } },
+    "quality": { "$ref": "#/$defs/quality" },
+    "created_at": { "type": "string", "format": "date-time" }
+  },
+  "$defs": {
+    "source": {
+      "type": "object",
+      "required": ["kind", "platform", "extractor"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "enum": ["video", "audio", "article", "local"] },
+        "platform": { "type": "string", "examples": ["youtube", "bilibili", "rss", "wechat", "generic", "local"] },
+        "url": { "type": ["string", "null"] },
+        "canonical_url": { "type": ["string", "null"] },
+        "title": { "type": ["string", "null"] },
+        "author": { "type": ["string", "null"] },
+        "published_at": { "type": ["string", "null"] },
+        "duration_sec": { "type": ["number", "null"] },
+        "lang_hint": { "type": ["string", "null"] },
+        "extractor": { "type": "string" },
+        "extra": { "type": "object", "additionalProperties": true }
+      }
+    },
+    "media": {
+      "type": "object",
+      "required": ["audio_path", "audio_sha256", "sample_rate", "channels"],
+      "additionalProperties": false,
+      "properties": {
+        "audio_path": { "type": "string", "description": "相对 data 目录的路径" },
+        "audio_sha256": { "type": "string" },
+        "sample_rate": { "const": 16000 },
+        "channels": { "const": 1 },
+        "bytes": { "type": "integer" }
+      }
+    },
+    "language": {
+      "type": "object",
+      "required": ["detected", "probability"],
+      "additionalProperties": false,
+      "properties": {
+        "detected": { "type": "string" },
+        "probability": { "type": "number" },
+        "script": { "type": ["string", "null"], "description": "cjk | latin | mixed" }
+      }
+    },
+    "segment": {
+      "type": "object",
+      "required": ["idx", "start", "end", "text"],
+      "additionalProperties": false,
+      "properties": {
+        "idx": { "type": "integer", "minimum": 0 },
+        "start": { "type": "number", "minimum": 0 },
+        "end": { "type": "number", "minimum": 0 },
+        "text": { "type": "string", "minLength": 1 },
+        "speaker": { "type": ["string", "null"] },
+        "confidence": { "type": ["number", "null"] },
+        "flags": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "chapter": {
+      "type": "object",
+      "required": ["title", "start", "end"],
+      "additionalProperties": false,
+      "properties": {
+        "title": { "type": "string" },
+        "start": { "type": "number" },
+        "end": { "type": "number" },
+        "summary": { "type": ["string", "null"] }
+      }
+    },
+    "quality": {
+      "type": "object",
+      "required": ["asr_engine", "segment_count", "chars", "flags", "warnings"],
+      "additionalProperties": false,
+      "properties": {
+        "asr_engine": { "type": "string" },
+        "segment_count": { "type": "integer" },
+        "chars": { "type": "integer" },
+        "avg_confidence": { "type": ["number", "null"] },
+        "distinct_speakers": { "type": ["integer", "null"] },
+        "flags": {
+          "type": "object",
+          "additionalProperties": { "type": "integer" },
+          "description": "可计数的清洗动作：repetition_collapsed / empty_dropped / merged / hallucination_dropped / clamp_fixed"
+        },
+        "warnings": { "type": "array", "items": { "type": "string" } }
+      }
+    }
+  }
+}

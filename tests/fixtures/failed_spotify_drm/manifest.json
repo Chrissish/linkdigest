@@ -1,0 +1,17 @@
+{
+  "id": "9393f96d9c18",
+  "dir": "20261117-0112_unknown_open-09G8gsNNs19OamaWiZCU73_9393f96d9c18",
+  "input": "https://open.spotify.com/episode/09G8gsNNs19OamaWiZCU73",
+  "title": null,
+  "platform": null,
+  "url": "https://open.spotify.com/episode/09G8gsNNs19OamaWiZCU73",
+  "status": "failed",
+  "chars": null,
+  "duration_sec": null,
+  "llm_model": null,
+  "degraded": false,
+  "created_at": "2026-11-16T17:12:00+00:00",
+  "artifacts": [
+    "stages.jsonl"
+  ]
+}

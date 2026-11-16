@@ -1,0 +1,2 @@
+来源任务目录：data/jobs/20261117-0112_unknown_open-09G8gsNNs19OamaWiZCU73_9393f96d9c18
+只保留产物（manifest/transcript/report/source/usage/stages + handoff），不含音视频。
