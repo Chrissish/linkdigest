@@ -2,25 +2,34 @@
 
 ## 1. 模块与职责
 
-| 模块 | 职责 | 关键函数 |
+| 层 / 模块 | 职责 | 关键函数 |
 | --- | --- | --- |
-| `config` | 全部可调项集中一处，环境变量驱动 | `Settings`、`settings.ensure_dirs()` |
-| `sources` | 链接分类、采集、归一为「音频文件 or 正文」 | `classify(url)`、`fetch(url, workdir)`、`bundle_id_for(seed)` |
-| `media` | 音轨抽取与时长闸门 | `to_wav(src, dst)`、`guard_duration(path)` |
-| `asr` | 引擎适配，两引擎同结构 | `transcribe(wav, language)`、`available_engines()` |
-| `normalize` | 规则清洗、去幻觉、切段指标 | `normalize_segments(raw)`、`text_to_segments(text)` |
-| `bundle` | 契约构造、机械切章、校验、落盘 | `build_bundle(...)`、`validate_bundle(dict)` |
-| `llm` | OpenAI 兼容客户端 + 用量记账 | `LLMClient.chat_json()`、`parse_json()` |
-| `report` | 分块、map/reduce、降级、Markdown 渲染、双形态落盘 | `build_report(bundle)`、`render_markdown(...)`、`save_report(...)` |
-| `html_report` | HTML 报告渲染（模板 + 内联 CSS，零外部资源） | `render_html(bundle, report, extra)` |
+| `conventions` | 纯工具：时间码、命名、文本度量、JSON 落盘、资源读取 | `ts()`、`parse_ts()`、`slugify()`、`read_json()` |
+| `config` | 全部可调项集中一处，环境变量驱动，构造时定值 | `Settings`、`settings.ensure_dirs()` |
+| `bootstrap` | 显式副作用：代理写环境、建目录 | `bootstrap()`、`install_proxy()` |
+| `net` | 出口与传输：代理、HTTP、探活、cookies、失败归因 | `reachability()`、`stream_to()`、`explain_error()` |
+| `capabilities.ffmpeg` | 音轨抽取与时长闸门 | `to_wav(src, dst)`、`guard_duration(path)` |
+| `capabilities.speech` | ASR 端口 + 两引擎适配 | `transcribe(wav, language)`、`available_engines()` |
+| `capabilities.llm` | 理解层端口 + OpenAI 兼容传输 + 用量记账 | `LLMClient.chat_json()`、`parse_json()` |
+| `capabilities.ocr` | 图文源内嵌图片（可选） | `ocr_images(paths)` |
+| `contracts` | 契约模型、构造、机械切章、校验、schema 导出 | `build_bundle(...)`、`validate_bundle(dict)` |
+| `clean` | 规则清洗、去幻觉、切段指标 | `normalize_segments(raw)`、`text_to_segments(text)` |
+| `ingest` | 链接判定与采集，归一为「音频文件 or 正文」 | `fetch(url, workdir)`、`classify(url)`、`bundle_id_for(seed)` |
+| `understand` | 分块、提示词装载、map/reduce、降级 | `build_report(bundle)`、`degraded_report(bundle)` |
+| `render` | Markdown / HTML 渲染与双形态落盘 | `render_markdown(...)`、`render_html(...)`、`save_report(...)` |
 | `handoff` | 无密钥时的交接包导出与答案回收（三层契约：必填 / 不可违反 / 可选） | `export_handoff(job_id, bundle)`、`apply_answer(job_id, payload)` |
-| `pipeline` | 阶段编排、进度、错误处理 | `run_job(job_id, store)` |
-| `store` | SQLite 状态 + 可读产物路径 + 索引 | `Store.resolve()`、`job_dir()`、`finalize_dir()`、`refresh_index()` |
-| `api` | HTTP + 静态页 + 线程池 | `create_job`、`upload`、`get_job`、`apply` |
+| `jobs` | SQLite 状态 + 可读产物路径 + 阶段日志 + 索引 + 收尾 | `Store.resolve()`、`job_dir()`、`finalize()`、`refresh_index()` |
+| `app.pipeline` | 阶段编排、进度、错误处理 | `run_job(job_id, store)` |
+| `app.service` | 用例：建任务、应用答案、补渲染、清理 | `create_job()`、`apply_external()`、`prune()` |
+| `api` / `cli` | 交付形态：HTTP 路由 / 终端排版 | `app`、`main()` |
 
-依赖方向单向：`pipeline → {sources, media, asr, normalize, bundle, report, handoff}`，
-`handoff → {report, models, store}`，`report → {llm, models}`，`report.save_report → html_report`（延迟导入，避免循环）。
-`models` 不被任何下层反向依赖，是纯数据。
+依赖方向单向（详见 ARCHITECTURE 的分层图）：`app → {ingest, clean, contracts, understand, render, handoff, jobs}`，
+`handoff → {render, understand, jobs}`，`understand → {capabilities.llm, contracts}`，
+`ingest → {net, contracts}`，`capabilities → net|config`，`conventions` 不依赖任何层。
+`contracts.models` 不被任何下层反向依赖，是纯数据。
+
+非代码资源不在这张表里：提示词在 `resources/prompts/`，版式在 `resources/templates/`，
+报错话术在 `resources/messages/`，幻觉黑名单在 `resources/asr/`，网页在 `resources/web/`。
 
 ## 2. 契约：Transcript Bundle
 
@@ -122,13 +131,18 @@ CREATE TABLE jobs (
 
 ## 8. 扩展点
 
-**加平台**：只需在 `sources.PLATFORMS` 加域名，并在 `fetch()` 里选路径。
+**加平台**：在 `ingest/platforms.py` 的 `PLATFORMS` 加域名，若要专门路线就在 `ingest/router.py`
+里选路径、并按需新增一个 `ingest/<平台>.py`。
 优先级：官方 RSS/直链 > HTML 捞音频 > yt-dlp > 无头浏览器截图兜底（未实现）。
 
-**加 ASR 引擎**：实现 `_xxx(wav, language, duration) -> ASRResult`，在 `resolve_engine()` 注册。
+**加 ASR 引擎**：写一个 `capabilities/speech/<引擎>.py`，实现
+`transcribe(wav, language, duration) -> ASRResult` 与 `engine_id`，在 `_REGISTRY` 里登记一行。
 不要在上层写 `if engine == ...`。
 
-**说话人分离**：`Segment.speaker` 字段已预留。接入点在 `normalize` 之后、`build_bundle` 之前，
+**换模型厂商**：`capabilities/llm/openai.py` 换成任何提供 `complete(payload) -> dict` 的传输类即可；
+协议不同（非 OpenAI 兼容）也只影响这一个文件。
+
+**说话人分离**：`Segment.speaker` 字段已预留。接入点在 `clean` 之后、`build_bundle` 之前，
 输出 `list[(start, end, speaker)]` 与段做时间重叠匹配即可，契约不用改。
 
 **A2UI（二期）**：`Report` 已经是结构化 JSON，映射到 A2UI 组件树是一次纯转换：

@@ -5,6 +5,17 @@
 
 ## [Unreleased]
 
+### 变更（内部重构，对外行为不变）
+
+- 代码按层拆分：`conventions / config / net / capabilities / contracts / clean / ingest /
+  understand / render / handoff / jobs / app`，依赖只向下。
+- 外部依赖收进 `capabilities/`：一个能力一个端口（`base.py`）+ 每实现一个文件，
+  ASR 引擎与模型都可换而不动业务代码。
+- 非代码资源移出 Python：提示词 `resources/prompts/`、版式 `resources/templates/`、
+  报错话术 `resources/messages/`、幻觉黑名单 `resources/asr/`、网页 `resources/web/`。
+- 去掉 import 副作用：代理写入环境变量改由 `bootstrap()` 显式执行。
+- 重复实现收敛：`ts()` / `_chapters_block` / `_to_report` 各只剩一份。
+
 ### 计划中
 
 - 任务队列持久化：进程重启后能续跑未完成的任务

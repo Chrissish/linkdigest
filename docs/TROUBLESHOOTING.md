@@ -10,7 +10,7 @@
 
 ## 网页打不开 / 点了没反应
 
-界面是后端渲染的单页，**必须走 HTTP**。直接双击 `web/index.html`（`file://`）不会工作：
+界面是后端渲染的单页，**必须走 HTTP**。直接双击 `src/linkdigest/resources/web/index.html`（`file://`）不会工作：
 页面里的 `/static/app.js` 会被解析成 `file:///static/app.js`，控制台报
 `ERR_FILE_NOT_FOUND`，`/api/*` 同样不存在，点「生成总结」自然毫无反应。
 

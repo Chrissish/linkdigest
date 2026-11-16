@@ -17,22 +17,36 @@
 
 ```
 ┌─ 确定性层（全开源、可复现、可单测）─────────────────────────┐
-│ sources        yt-dlp / feedparser / trafilatura / podcast-resolver / 本地文件 │
-│ media          ffmpeg：-vn -ac 1 -ar 16000                    │
-│ asr            faster-whisper ｜ mlx-whisper（同结构）        │
-│ normalize      标点/normalize、时间戳、幻觉、重复、碎片合并    │
-│ bundle         Pydantic 契约 + 机械切章 + 校验 + 落盘          │
+│ ingest        平台判定 + yt-dlp / feedparser / trafilatura / podcast / 本地文件 │
+│ capabilities  ffmpeg（-vn -ac 1 -ar 16000）｜speech（faster / mlx）｜ocr        │
+│ clean         标点/normalize、时间戳、幻觉、重复、碎片合并    │
+│ contracts     Pydantic 契约 + 机械切章 + 校验 + schema 导出    │
 └──────────────────────┬──────────────────────────────────────┘
                        │  Transcript Bundle (JSON, schema v1.0)
 ┌──────────────────────┴──────────────────────────────────────┐
 │ 智能层（可替换、可降级）                                      │
-│ report         chunk → map(并行) → reduce → Report(JSON)      │
-│ handoff        无密钥时导出作业单，交给外部 agent 理解         │
-│ render         Report → Markdown                              │
+│ understand    chunk → map(并行) → reduce → Report(JSON)       │
+│ handoff       无密钥时导出作业单，交给外部 agent 理解         │
+│ render        Report → Markdown / HTML                        │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-跨语言发生在 `report` 的提示层：输入是任意语言的转写稿，输出永远是简体中文。
+代码目录与依赖方向（只允许向下依赖，跨层反向 import 一律视为 bug）：
+
+```
+conventions  ←  config  ←  net  ←  capabilities  ←  contracts
+                                    ↑                    ↑
+                                  clean  ←  ingest  ←  understand  ←  render
+                                                          ↑           ↑
+                                                        handoff  ←   jobs
+                                                          ↑
+                                                         app  →  api / cli
+```
+
+`api.py` 与 `cli.py` 是交付形态，只做装配与格式化；用例在 `app/service.py`，
+编排在 `app/pipeline.py`。两个入口共用同一套动作，行为不会分叉。
+
+跨语言发生在 `understand` 的提示层：输入是任意语言的转写稿，输出永远是简体中文。
 这样 MT 的错误不会污染事实提取，模型可以直接读到原文。
 
 ## 数据流
@@ -145,6 +159,24 @@ Obsidian、Logseq 这类工具可以直接把这些键当元数据用，不需�
 
 代价：多一份产物、样式要单独维护、老任务需要 `rerender.py` 补一次；
 收益：报告能脱离本机界面独立存在，分享和归档不再依赖这个服务是否在跑。
+
+**ADR-12 外部依赖按端口/适配器隔离，非代码资源移出代码**：早期 `sources.py` 一个文件
+1033 行，同时装着链接归一、平台表、cookies 解析、代理探测（会改进程环境）、yt-dlp 适配、
+trafilatura 适配、RSS 适配、播客三级路线和十几条中文报错文案。后果很具体：换 ASR 引擎要读
+一个和 ASR 无关的文件；改一句报错要在 300 行匹配逻辑里找；`config.py` 一 import 就写
+`os.environ`，测试无法在干净环境跑。
+
+现在分两刀：
+
+| 切法 | 内容 | 收益 |
+| --- | --- | --- |
+| 依赖方向 | 每层只依赖下一层，`api`/`cli` 只做装配 | 换实现只改一个文件，测试可以只 import 一层 |
+| 端口/适配器 | `capabilities/<能力>/base.py` 定端口，每实现一个文件，`__init__` 负责发现与派发 | 加一个 ASR 引擎或换一家模型 = 新增文件 + 登记一行，业务代码不动 |
+| 资源外置 | 提示词 `resources/prompts/`，版式 `resources/templates/`，报错话术 `resources/messages/`，黑名单 `resources/asr/`，网页 `resources/web/` | 改文案、改模板、改提示词不碰 Python；diff 也干净 |
+
+代价：文件数从 16 个变成 40 多个，跳转成本略高；`importlib.resources` 要求资源随包
+分发（`pyproject` 的 `package-data`），漏配就会在安装后 500。收益：一处改一处生效，
+且「这个能力能不能换掉」变成了看目录就能回答的问题。
 
 **ADR-5 单进程 + 线程池**：MVP 只跑 1-2 个并发。上 Celery/Redis 是纯负债；瓶颈在 ASR 和网络，不在调度。
 

@@ -19,11 +19,11 @@ LinkDigest 不内置账号体系，也不代你登录。它只读一份 Netscape
 python -m linkdigest.cli --check "https://www.youtube.com/watch?v=xxx"
 
 # 2. 本地这份 cookies 算不算登录态（纯本地判断，秒出）
-python -c "import sys,json; sys.path.insert(0,'src'); from linkdigest.sources import cookies_summary; \
+python -c "import sys,json; sys.path.insert(0,'src'); from linkdigest.net.cookies import summary as cookies_summary; \
 print(json.dumps(cookies_summary(), ensure_ascii=False, indent=1))"
 
 # 3. 服务端认不认（带 cookies 真打一次站点，读页面的 LOGGED_IN）
-python -c "import sys,json; sys.path.insert(0,'src'); from linkdigest.sources import login_state; \
+python -c "import sys,json; sys.path.insert(0,'src'); from linkdigest.net.cookies import login_state; \
 print(json.dumps(login_state(), ensure_ascii=False, indent=1))"
 ```
 

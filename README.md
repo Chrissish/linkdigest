@@ -144,15 +144,34 @@ pip install -e ".[mlx]"      # Apple Silicon 加速
 
 ### 目录
 
+代码按层分目录，依赖只能向下；外部依赖（ffmpeg / ASR / OCR / 模型）全部关在
+`capabilities/` 里，一个能力一个端口 + 每实现一个文件。
+
 ```
-src/linkdigest/          管道本体（采集 → ASR → 契约 → 理解 → 报告）
-web/                     网页界面（单页，由 API 直接托管）
-scripts/                 安装/启动、cookies 工具、自检与重渲染等运维脚本
-schemas/                 契约 JSON Schema
-docs/                    架构、排错、cookies、报告格式
-tests/fixtures/          回归样本：产物快照 + samples/ 里的自检输入
-data/                    运行时产出（已 gitignore）
+src/linkdigest/
+  conventions/     纯工具：时间码、命名、文本度量、JSON 落盘、资源读取
+  config/          配置快照（只读环境，无副作用）
+  net/             出口与传输：代理、HTTP、探活、cookies、失败归因
+  capabilities/    外部依赖：ffmpeg.py ｜ speech/（faster / mlx）｜ ocr.py ｜ llm/
+  contracts/       契约：pydantic 模型、构造、校验（下游唯一输入）
+  clean/           确定性清洗：标点、时间戳、幻觉、重复
+  ingest/          采集：平台表、链接判定、正文、RSS、播客、yt-dlp
+  understand/      理解：分块、提示词装载、map-reduce、降级兜底
+  render/          渲染：Markdown / HTML，同源一个 Report
+  handoff/         外部交接：作业单渲染、答案应用
+  jobs/            任务：状态库、产物目录、阶段日志、索引、收尾
+  app/             编排（pipeline）与用例（service）
+  api.py cli.py    交付形态：只做装配与终端排版
+  resources/       非代码资源：prompts/ templates/ messages/ asr/ web/
+scripts/           安装/启动、cookies 工具、自检与重渲染等运维脚本
+schemas/           契约 JSON Schema
+docs/              架构、排错、cookies、报告格式
+tests/fixtures/    回归样本：产物快照 + samples/ 里的自检输入
+data/              运行时产出（已 gitignore）
 ```
+
+改文案、改模板、改提示词不需要碰 Python：报错话术在 `resources/messages/`，
+BRIEF 与报告版式在 `resources/templates/`，模型提示词在 `resources/prompts/`。
 
 ## 常见问题
 
