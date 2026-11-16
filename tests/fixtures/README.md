@@ -4,10 +4,12 @@
 不用联网、不用 ASR、不用模型，就能判断某次改动有没有把已有行为改坏。
 
 体积控制：只留产物（manifest / transcript / report / source / usage / stages / handoff），
-**不留音视频**（source.*、audio.wav）。源文件在 `samples/` 里，需要重跑时用它们。
+**不留音视频**（source.*、audio.wav）。重跑用的源文件放在同目录的 `samples/` 里。
 
 | 目录 | 来源 | 钉住的行为 |
 | --- | --- | --- |
+| `samples/demo_zh.txt` | 自检输入：纯文本 | — |
+| `samples/demo_zh.aiff` | 自检输入：96 秒中文音频（4.2MB） | — |
 | `local_text_external_agent/` | `samples/demo_zh.txt`，外部 agent 回填 answer.json | 纯文本入口、frontmatter/tags 写入、handoff 交接包结构 |
 | `local_audio_external_agent/` | `samples/demo_zh.aiff`，走完 ASR + 外部理解层 | ASR 段落到 report 的时间码链路、`report.html` 内联样式 |
 | `local_audio_degraded/` | 同上，但没有模型，走降级 | 降级报告结构、`degraded` 标记、handoff 提示段 |
@@ -15,6 +17,7 @@
 | `failed_spotify_drm/` | Spotify 单集，DRM 拦截 | DRM 类错误的文案（注意：播客走 RSS 是能拿到的，这两个结果不矛盾） |
 
 每个目录里的 `ORIGIN.txt` 记了它原来在 `data/jobs/` 下的目录名。
+产物内部（如 `manifest.json` 的 `input`）保留当时的原始路径字符串，是快照的一部分，不做回改。
 
 ## 怎么用
 

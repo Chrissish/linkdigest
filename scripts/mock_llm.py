@@ -3,7 +3,7 @@
 用法：
     python scripts/mock_llm.py 8899 &
     LLM_BASE_URL=http://127.0.0.1:8899/v1 LLM_API_KEY=mock \
-    python -m linkdigest.cli samples/demo_zh.aiff --show
+    python -m linkdigest.cli tests/fixtures/samples/demo_zh.aiff --show
 """
 
 from __future__ import annotations

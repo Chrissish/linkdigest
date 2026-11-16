@@ -145,14 +145,13 @@ pip install -e ".[mlx]"      # Apple Silicon 加速
 ### 目录
 
 ```
-src/linkdigest/   管道本体（采集 → ASR → 契约 → 理解 → 报告）
-web/              网页界面（单页，由 API 直接托管）
-scripts/          安装/启动、cookies 工具、自检与重渲染等运维脚本
-schemas/          契约 JSON Schema
-docs/             架构、排错、cookies、报告格式
-tests/fixtures/   回归样本（真实产物快照，不含音视频）
-samples/          自检用的样例输入
-data/             运行时产出（已 gitignore）
+src/linkdigest/          管道本体（采集 → ASR → 契约 → 理解 → 报告）
+web/                     网页界面（单页，由 API 直接托管）
+scripts/                 安装/启动、cookies 工具、自检与重渲染等运维脚本
+schemas/                 契约 JSON Schema
+docs/                    架构、排错、cookies、报告格式
+tests/fixtures/          回归样本：产物快照 + samples/ 里的自检输入
+data/                    运行时产出（已 gitignore）
 ```
 
 ## 常见问题
