@@ -3,6 +3,53 @@
 格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.4.0] - 2026-11-18
+
+### 新增
+
+- `JOB_WORKERS`：同时在跑的任务数上限（默认 5）。瓶颈通常在 ASR——mlx-whisper 走
+  Metal，多任务转写会抢 GPU，调太大反而互相拖慢。
+- 粘贴框支持一次提交多个链接：按换行 / 分号等分隔符拆分，逐个建任务进队列。
+- 支持 `creators.spotify.com` / `podcasters.spotify.com` 的单集链接：页面里挖出
+  anchor.fm 的 RSS，取 enclosure 音频直链；出口代理不可达时重探并重试。
+- `LLM_THINKING`：DeepSeek 系思考模式开关。0=关闭（结构化摘要建议关，带思考的模型
+  会先烧推理 token，长转写分块下容易把 max_tokens 烧穿）；1=开启；不设=跟厂商默认。
+  单任务覆盖键 `llm.thinking` 同步开放。
+- 失败任务可「重新理解」：只要转写产物在（比如卡死在理解阶段的），复用转写只重跑
+  模型理解与报告，不重新下载与转写。前端失败行出对应按钮。
+- 理解阶段看门狗 `UNDERSTAND_TIMEOUT`（默认 30 分钟）：线程挂死时 httpx 的请求级
+  超时救不了「没有请求在飞」的僵局，整阶段硬上限兜底，到点判失败、可重试。
+- 服务启动时把遗留的 queued/running 任务标记为失败（上次进程退出时正在跑的任务
+  不会有人接着跑），前端不再无限转圈，重试入口也解禁。
+- `llm_debug.jsonl`：每次 LLM 调用前后往任务目录写一行事件（请求参数 / finish_reason
+  / 用量 / 错误），排查「卡在哪一次调用」不用再猜。
+- 产出规范单一事实源：`templates/spec.md` + `contracts/spec.py`。交接单（handoff）
+  与管线提示词从同一份 spec 渲染，必填 schema、去重口径、body/sections 分工不再
+  两边各维护一份。
+
+### 变更
+
+- 网页端改三栏工作台：左栏粘贴操作区 + 执行中队列，中间报告阅读区，右栏历史任务。
+  左右栏可收起；页面收窄自动收起；≤680px 走底部 tab 栏（当前报告 / 添加任务 / 历史）。
+- 报告正文（body）不再设 800 字上限，深度由内容决定，与交接单口径一致。
+- `chat_json` 解析失败自动重试（最多 3 次，输出预算逐次翻倍至 16000）：
+  带思考的模型在预算紧了时 content 会被截断甚至为空，翻倍预算比换提示词管用。
+- 报告不再产出时间线模块：与 sections 的分段时间码重复，禁令在 spec 单点维护。
+- 历史任务的标题与「打开」由按钮改为链接：左键仍是页内展开，右键可「在新标签页
+  打开 / 复制链接」。已完成的任务指向 `/api/jobs/{id}/html`。
+- 网页端资源读取带进程内缓存，改 `index.html` / `style.css` 后要重启服务才生效
+  （`app.js` 走静态挂载不受影响）。
+
+### 修复
+
+- 只收起左栏时布局塌陷：三栏 grid 全靠 auto-placement，中栏被排到第 1 列（0 宽）。
+  三块显式声明 `grid-column` 后不再受 DOM 顺序影响。
+- 打开报告时页面抖一下：无条件 `smooth scrollIntoView` 叠加滚动条出现引起的横向
+  挤压。改为条件触发即时滚动 + `scroll-margin-top` + `scrollbar-gutter: stable`。
+- 执行中的任务卡片溢出右栏：`min-width: auto` 连锁把内容最小宽顶破列宽，逐层归零。
+- 「重新理解」成功后漏写 `cost_usd`，成本账本只在整链重试时更新。
+- Spotify creators 链接此前不认平台正则，整条任务直接 403 失败（见新增）。
+
 ## [Unreleased]
 
 ### 计划中
