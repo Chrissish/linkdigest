@@ -114,6 +114,25 @@ def _is_explicit(cfg: Settings) -> bool:
     return _ALIASES.get(cfg.asr_engine.lower(), cfg.asr_engine.lower()) not in ("", "auto")
 
 
+def preview_engine(cfg: Settings) -> tuple[str, str]:
+    """状态页用的廉价判定：架构 + 本地模型文件，**不加载权重**。
+
+    与 select_engine 只差最后一步 warmup：1.5GB 权重不该由一次 health 请求承担，
+    而「文件在不在」已经足够回答「这一进程实际会用哪个引擎」。
+    返回 (引擎名, 说明)；说明为空表示按首选跑。
+    """
+    target = resolve_engine(cfg)
+    if target != "mlx-whisper":
+        return target, ""
+    engine = MlxWhisperEngine(cfg)
+    if engine.model_path is not None:
+        return target, ""
+    reason = f"本地没有 {engine.repo} 的权重"
+    if "faster-whisper" in available_engines():
+        return "faster-whisper", f"{reason}，将回落到 faster-whisper"
+    return target, reason
+
+
 def select_engine(cfg: Settings, name: str | None = None) -> tuple[SpeechEngine, str]:
     """挑一个真能跑的引擎，返回 (引擎, 降级原因)。降级原因为空串表示按首选跑。
 
@@ -157,6 +176,7 @@ __all__ = [
     "build_engine",
     "mlx_supported",
     "normalize_language",
+    "preview_engine",
     "resolve_engine",
     "select_engine",
     "transcribe",

@@ -572,6 +572,14 @@ check("ASR_MODEL_DIR 也认配置名当子目录", MlxWhisperEngine(
     cfg.model_copy(update={"asr_model": "small", "asr_model_dir": _model_root})
 ).model_path, _model_root / "small")
 
+# 状态页口径：报「实际会用哪个」，不是「装了哪些」
+check("状态页报实际选的引擎", _speech.preview_engine(_dir_cfg)[0], "mlx-whisper")
+check("模型在本地时状态页不带回落说明", _speech.preview_engine(_dir_cfg)[1], "")
+check("模型缺失时状态页直接报回落",
+      _speech.preview_engine(cfg.model_copy(
+          update={"asr_model": "medium", "asr_model_dir": _model_root}))[0],
+      "faster-whisper")
+
 _probe_missing, _probe_reason = _speech._mlx_probe(
     cfg.model_copy(update={"asr_model": str(tempfile.mkdtemp())})
 )

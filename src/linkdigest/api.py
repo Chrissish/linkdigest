@@ -26,7 +26,7 @@ from pydantic import BaseModel
 from . import bootstrap
 from .app import service
 from .app.pipeline import run_job
-from .capabilities.speech import available_engines
+from .capabilities.speech import available_engines, preview_engine
 from .config import ConfigError, Settings, load
 from .config import override as config_override
 from .conventions.resources import text as resource_text
@@ -91,6 +91,13 @@ def _cookies_banner() -> str:
     return f"仅访客（{info.get('lines', 0)} 条，未登录）"
 
 
+def _asr_banner() -> str:
+    """启动横幅与状态页用同一口径：报实际会用的引擎，不是装了哪些。"""
+    engine, note = preview_engine(cfg)
+    text = f"{engine} / {cfg.asr_model}"
+    return f"{text}（{note}）" if note else text
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     effective = proxy.current()
@@ -98,7 +105,7 @@ async def lifespan(_: FastAPI):
         f"[linkdigest] 出口代理 {effective or cfg.system_proxy or '（未设置，直连）'}"
         f"{'（系统代理）' if not effective and cfg.system_proxy else ''}"
         f" · 模型 {'就绪 ' + cfg.llm_model if cfg.llm_ready else '未配置（降级模式）'}"
-        f" · ASR {cfg.asr_model}"
+        f" · ASR {_asr_banner()}"
         f" · cookies {_cookies_banner()}",
         flush=True,
     )
@@ -112,11 +119,15 @@ pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="job")
 
 @app.get("/api/health")
 def health() -> dict:
+    asr_engine, asr_note = preview_engine(cfg)
     return {
         "ok": True,
         "version": cfg.pipeline_version,
         "ffmpeg": bool(cfg.ffmpeg),
         "js_runtime": cfg.js_runtime,
+        # 这一进程实际会用哪个引擎（廉价判定，不加载权重）；asr_engines 只是装了什么
+        "asr_engine": asr_engine,
+        "asr_engine_note": asr_note,
         "asr_engines": available_engines(),
         "asr_model": cfg.asr_model,
         "llm": {"ready": cfg.llm_ready, "model": cfg.llm_model, "base_url": cfg.llm_base_url},

@@ -22,6 +22,9 @@
 
 ### 修复
 
+- 状态页 ASR 徽章把**装了的引擎**并排显示成「faster-whisper / mlx-whisper」，
+  读起来像两个引擎同时在跑。改为报这一进程实际会用的那个（`preview_engine`：架构 +
+  本地模型文件，不加载权重），装了哪些降为悬停提示；启动横幅同一口径。
 - mlx 适配器漏读 `avg_logprob`，导致 `confidence` 恒为 None——报告置信度显示 n/a，
   低置信度告警永不触发。现在与 faster-whisper 同一套换算。
 - mlx 适配器直接收 16k float32 PCM，不再让上游对同一段音频重复起一次 ffmpeg。

@@ -65,19 +65,23 @@ function banner(text) {
   el.textContent = text;
 }
 
-function pill(label, value, state) {
-  return `<span class="pill ${state || ""}"><span class="dot"></span>${label} <b>${value}</b></span>`;
+function pill(label, value, state, title) {
+  const tip = title ? ` title="${title}"` : "";
+  return `<span class="pill ${state || ""}"${tip}><span class="dot"></span>${label} <b>${value}</b></span>`;
 }
 
 async function loadHealth() {
   try {
     const h = await api("/api/health");
-    const engines = h.asr_engines.length ? h.asr_engines.join(" / ") : "未安装";
+    // 徽章报「实际会用哪个」：装了两个引擎不代表两个都在跑
+    const installed = h.asr_engines.length ? h.asr_engines.join(" / ") : "未安装";
+    const engine = h.asr_engine || installed;
+    const asrTip = [h.asr_engine_note, `已安装：${installed}`].filter(Boolean).join("\n");
     const ck = h.cookies || {};
     const cookieText = !ck.present ? "无" : (ck.logged_in ? "已登录" : "仅访客");
     const pills = [
       pill("ffmpeg", h.ffmpeg ? "就绪" : "缺失", h.ffmpeg ? "on" : "off"),
-      pill("ASR", `${engines} · ${h.asr_model}`, h.asr_engines.length ? "on" : "off"),
+      pill("ASR", `${engine} · ${h.asr_model}`, h.asr_engines.length ? "on" : "off", asrTip),
       pill("模型", h.llm.ready ? h.llm.model : "未配置（降级）", h.llm.ready ? "on" : "off"),
       pill("cookies", cookieText, ck.logged_in ? "on" : "off"),
     ];
