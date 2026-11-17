@@ -40,6 +40,9 @@ cp .env.example .env        # 填 LLM_API_KEY；不填也能跑，报告降级�
 ./scripts/run.sh            # http://127.0.0.1:8787
 ```
 
+网页上贴链接或传文件就能跑。标题下方是历史任务列表：按状态筛选（全部 / 进行中 / 完成 / 失败），
+勾选后可批量删除，目录进废纸篓可恢复；还在跑的任务不给删，等它结束或失败。
+
 首次运行会下载 Whisper 模型（默认 `small`，约 460MB；`large-v3` 是 1.5GB，慢 3-5 倍但准得多）。
 国内网络建议 `export HF_ENDPOINT=https://hf-mirror.com`。
 

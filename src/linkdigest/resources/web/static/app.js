@@ -97,6 +97,12 @@ async function loadHealth() {
     ];
     $("#pills").innerHTML = pills.join("");
     $("#pills").title = ck.hint || "";
+    // 版本号跟着后端进程报的走，不在页面里写死（写死必然和发布脱节）
+    const ver = $("#ver");
+    if (h.version) {
+      ver.textContent = `v${h.version}`;
+      ver.hidden = false;
+    }
     document.getElementById("offline-bar")?.remove();
     return true;
   } catch (err) {
