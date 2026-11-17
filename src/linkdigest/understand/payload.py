@@ -48,7 +48,6 @@ def report_from_payload(payload: dict) -> Report:
         body=str(payload.get("body") or ""),
         appendix=str(appendix),
         tldr=[str(x) for x in payload.get("tldr") or []],
-        key_points=[str(x) for x in payload.get("key_points") or []],
         data_points=data_points,
         quotes=quotes,
         controversies=[str(x) for x in payload.get("controversies") or []],

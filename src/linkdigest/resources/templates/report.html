@@ -304,23 +304,37 @@ h2 {
 }
 a.ts:hover { color: var(--accent); }
 
-/* ---------- 分段 ---------- */
+/* ---------- 分段索引 ---------- */
 
-.seg { margin: 0 0 30px; }
-.seg-head {
-  display: flex;
-  gap: 12px;
-  align-items: baseline;
-  margin: 0 0 8px;
-}
-.seg-head h3 {
+.index {
+  list-style: none;
   margin: 0;
-  font-size: 17px;
-  font-weight: 600;
-  line-height: 1.5;
+  padding: 0;
 }
-.seg ul { margin: 0; padding-left: 1.3em; }
-.seg li { margin: 0.3em 0; color: var(--ink-2); font-size: 15.5px; }
+.index li {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 2px 14px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--rule-soft);
+}
+.index li:last-child { border-bottom: 0; }
+.index .ts { grid-column: 1; grid-row: 1; }
+.index .idx-title {
+  grid-column: 2;
+  grid-row: 1;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.55;
+  color: var(--ink);
+}
+.index .idx-gloss {
+  grid-column: 2;
+  grid-row: 2;
+  color: var(--ink-2);
+  font-size: 14px;
+  line-height: 1.65;
+}
 
 /* ---------- 列表型区块 ---------- */
 
@@ -441,8 +455,8 @@ a.ts:hover { color: var(--accent); }
   .sheet { max-width: none; padding: 0; }
   h1 { font-size: 20pt; }
   h2 { margin-top: 22pt; break-after: avoid; }
-  .prose h3, .seg-head h3 { break-after: avoid; }
-  .seg, .quote, .grid tr { break-inside: avoid; }
+  .prose h3, .index .idx-title { break-after: avoid; }
+  .index li, .quote, .grid tr { break-inside: avoid; }
   a { color: inherit; border: 0; text-decoration: none; }
   .toc { display: none; }
   .foot { margin-top: 28pt; }

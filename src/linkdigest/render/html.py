@@ -114,72 +114,32 @@ def _nav(report: Report, url: str | None, timeline: bool) -> str:
         out.extend(f"    <li>{_esc(item)}</li>" for item in report.tldr)
         out.append("  </ol>")
         out.append("</section>")
-    # 文章类没有时间码可跳，节数又少时，目录只是把下面的内容再说一遍
-    if report.sections and (timeline or len(report.sections) >= 4):
-        out.append('<section class="block">')
-        out.append("  <h2>分段</h2>")
-        out.append('  <ol class="toc">')
-        for i, section in enumerate(report.sections, 1):
-            stamp = _stamp(section.start, url, timeline)
-            out.append("    <li>")
-            if stamp:
-                out.append(f"      {stamp}")
-            out.append(f'      <a class="toc-title" href="#seg-{i}">{_esc(section.title)}</a>')
-            out.append("    </li>")
-        out.append("  </ol>")
-        out.append("</section>")
     return "\n".join(out)
 
 
 def _main(report: Report, url: str | None, timeline: bool) -> str:
     out: list[str] = []
-    if report.body:
-        out.append('<section class="block">')
-        out.append('  <article class="prose">')
-        out.append(_md(report.body))
-        out.append("  </article>")
-        out.append("</section>")
-
     if report.sections:
+        # 索引层：只给时间码与标题，细节全在正文里，这里不再复述
         out.append('<section class="block">')
-        out.append("  <h2>分段解读</h2>")
+        out.append("  <h2>分段索引</h2>")
+        out.append('  <ol class="index">')
         for i, section in enumerate(report.sections, 1):
             stamp = _stamp(section.start, url, timeline)
-            out.append(f'  <section class="seg" id="seg-{i}">')
-            out.append('    <div class="seg-head">')
-            out.append(f"      <h3>{_esc(section.title)}</h3>")
+            out.append(f'    <li id="seg-{i}">')
             if stamp:
                 out.append(f"      {stamp}")
-            out.append("    </div>")
-            if section.points:
-                out.append("    <ul>")
-                out.extend(f"      <li>{_esc(p)}</li>" for p in section.points)
-                out.append("    </ul>")
-            out.append("  </section>")
-        out.append("</section>")
-
-    if report.key_points:
-        out.append('<section class="block">')
-        out.append("  <h2>关键信息</h2>")
-        out.append('  <ol class="bullets">')
-        out.extend(f"    <li>{_esc(p)}</li>" for p in report.key_points)
+            out.append(f'      <span class="idx-title">{_esc(section.title)}</span>')
+            out.append("    </li>")
         out.append("  </ol>")
         out.append("</section>")
 
-    if report.data_points:
+    if report.body:
         out.append('<section class="block">')
-        out.append("  <h2>数据点</h2>")
-        out.append('  <table class="grid">')
-        head = "<tr><th>指标</th><th>数值</th>" + ('<th class="pos">位置</th>' if timeline else "") + "</tr>"
-        out.append(f"    <thead>{head}</thead>")
-        out.append("    <tbody>")
-        for point in report.data_points:
-            cells = f'<td>{_esc(point.label)}</td><td class="num">{_esc(point.value)}</td>'
-            if timeline:
-                cells += f'<td class="pos">{_stamp(point.start, url, timeline) or "—"}</td>'
-            out.append(f"      <tr>{cells}</tr>")
-        out.append("    </tbody>")
-        out.append("  </table>")
+        out.append("  <h2>正文</h2>")
+        out.append('  <article class="prose">')
+        out.append(_md(report.body))
+        out.append("  </article>")
         out.append("</section>")
 
     if report.quotes:

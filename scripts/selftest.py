@@ -361,7 +361,7 @@ answer = {
     "tldr": ["第一段讲契约", "第二段同样讲契约"],
     "sections": [{"title": "开头", "start": "00:00", "end": "00:12", "points": ["验证渲染"]}],
     "body": "### 契约怎么落下来\n\n正文是自由层，深度由内容决定，不该被字数限制住。",
-    "key_points": ["契约校验通过"],
+    "data_points": [{"label": "验证阈值", "value": "30 分钟", "start": "00:05"}],
     "quotes": [{"text": "第一段内容，用来验证契约。", "start": "00:00", "note": "原话"}],
     "appendix": "### 轮次对照\n\n| 轮次 | 结论 |\n| --- | --- |\n| 一 | 通过 |",
 }
@@ -374,6 +374,12 @@ check_true("报告已重渲染", "降级模式" not in markdown_text)
 check_true("报告含外部来源标注", "外部 agent" in markdown_text)
 check_true("intent 印在开头", "给准备复跑的人看" in markdown_text)
 check_true("body 渲染成正文", "## 正文" in markdown_text and "深度由内容决定" in markdown_text)
+check_true(
+    "md 分段索引在正文之前",
+    "## 分段索引" in markdown_text
+    and markdown_text.find("## 分段索引") < markdown_text.find("## 正文"),
+)
+check_true("数据点不进页面", "## 数据点" not in markdown_text and "验证阈值" not in markdown_text)
 check_true(
     "appendix 自带三级标题时仍补容器", "## 补充" in markdown_text and "### 轮次对照" in markdown_text
 )
@@ -442,6 +448,11 @@ check_true(
 )
 check_true("html 摘要不含 intent 卡", 'class="intent"' not in html_text)
 check_true("intent 收进页脚", 'class="intent-foot"' in html_text)
+check_true(
+    "html 分段索引在正文之前",
+    "分段索引" in html_text and html_text.find("分段索引") < html_text.find("<h2>正文</h2>"),
+)
+check_true("html 无数据点表", "数据点" not in html_text and "验证阈值" not in html_text)
 check("应用后状态为完成", final.status, "done")
 check_true(
     "usage 记录外部模式",

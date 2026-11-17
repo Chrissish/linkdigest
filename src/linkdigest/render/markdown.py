@@ -84,33 +84,16 @@ def render_markdown(bundle: TranscriptBundle, report: Report, extra: dict | None
         out.extend(f"- {item}" for item in report.tldr)
         out.append("")
 
-    if report.body:
-        out.extend(["## 正文", "", report.body.strip(), ""])
-
     if report.sections:
-        out.append("## 分段解读")
+        # 定位层：一行一段，给时间码与位置，不再展开成第二个叙事
+        out.append("## 分段索引")
         for section in report.sections:
             span = f"{ts(section.start)}–{ts(section.end)}" if timeline and section.start is not None else ""
-            out.append(f"### {section.title} {span}".rstrip())
-            out.extend(f"- {p}" for p in section.points)
-            out.append("")
-
-    if report.key_points:
-        out.append("## 关键信息")
-        out.extend(f"{i}. {p}" for i, p in enumerate(report.key_points, 1))
+            out.append(f"- {span} **{section.title}**".replace("-  **", "- **"))
         out.append("")
 
-    if report.data_points:
-        out.append("## 数据点")
-        out.append("| 指标 | 数值 | 位置 |" if timeline else "| 指标 | 数值 |")
-        out.append("| --- | --- | --- |" if timeline else "| --- | --- |")
-        for point in report.data_points:
-            out.append(
-                f"| {point.label} | {point.value} | {ts(point.start)} |"
-                if timeline
-                else f"| {point.label} | {point.value} |"
-            )
-        out.append("")
+    if report.body:
+        out.extend(["## 正文", "", report.body.strip(), ""])
 
     if report.quotes:
         out.append("## 值得记的原话")

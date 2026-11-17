@@ -28,9 +28,6 @@ def degraded_report(bundle: TranscriptBundle) -> Report:
             )
         )
 
-    candidates = [s for s in segs if 20 <= len(s.text) <= 140]
-    pool = candidates[3:] or candidates
-    step = max(1, len(pool) // 6) if pool else 1
     quotes = [
         Quote(text=clip(s.text, 120), start=s.start)
         for s in segs
@@ -41,7 +38,6 @@ def degraded_report(bundle: TranscriptBundle) -> Report:
         one_liner=clip(segs[0].text, 60),
         tldr=[clip(s.text, 70) for s in segs[:3]],
         sections=sections,
-        key_points=[clip(s.text, 140) for s in pool[::step][:6]],
         quotes=quotes,
         degraded=True,
         notes=["未配置 LLM_API_KEY，当前为抽取式降级摘要（无跨语言、无归纳）"],

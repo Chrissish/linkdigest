@@ -129,7 +129,9 @@ class Report(_Base):
     appendix: str = ""  # 内容特有结构：时间线 / 代码 / 人物表 / 对照表
     # —— 可选层：有则写，无则空 ——
     tldr: list[str] = Field(default_factory=list)
-    key_points: list[str] = Field(default_factory=list)
+    # 已废弃：与 tldr 重复。保留字段只为读得进老 report.json，不再产出、不再渲染。
+    key_points: list[str] = Field(default_factory=list, exclude=True)
+    # 数据层：进 answer/report.json 供下游取用，页面与 md 不渲染（数值已在正文里讲过）
     data_points: list[DataPoint] = Field(default_factory=list)
     quotes: list[Quote] = Field(default_factory=list)
     controversies: list[str] = Field(default_factory=list)
