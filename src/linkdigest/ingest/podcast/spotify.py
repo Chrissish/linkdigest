@@ -6,13 +6,15 @@
 
 from __future__ import annotations
 
+import re
 from urllib.parse import quote
 
 from ...config import Settings
-from ...net.errors import DownloadFailure
+from ...net import http
+from ...net.errors import DownloadFailure, explain_error
 from ...net.transfer import get_json
 from ..feed import entry_audio, matches
-from ..platforms import SPOTIFY_ID, SPOTIFY_OEMBED
+from ..platforms import SPOTIFY_CREATORS, SPOTIFY_ID, SPOTIFY_OEMBED
 from . import itunes
 from .target import PodcastTarget
 from .titles import title_score
@@ -21,8 +23,14 @@ from .titles import title_score
 # 再松会把同一节目的相邻集当成目标。
 DIRECT_HIT = 0.72
 
+# Spotify for Podcasters 的单集页里嵌着节目 RSS（Anchor 时代的 anchor.fm 直链）
+ANCHOR_RSS = re.compile(r"https?://anchor\.fm/s/[\w-]+/podcast/rss", re.I)
+
 
 def resolve(cfg: Settings, url: str) -> PodcastTarget:
+    creators = SPOTIFY_CREATORS.search(url)
+    if creators:
+        return resolve_creators(cfg, url, creators.group("slug"))
     match = SPOTIFY_ID.search(url)
     if not match:
         raise DownloadFailure(
@@ -80,4 +88,56 @@ def resolve(cfg: Settings, url: str) -> PodcastTarget:
         "最可能是 Spotify 独家节目（Exclusive）——这类节目没有公开 RSS，音频只存在于 Spotify 的加密流里。"
         "可行的下一步：在 Spotify 客户端下载该集后导出音频上传，或用其它平台（Apple Podcasts / 小宇宙 / 官网）"
         "上同一个节目的公开链接。"
+    )
+
+
+def resolve_creators(cfg: Settings, url: str, slug: str) -> PodcastTarget:
+    """creators / podcasters.spotify.com 的单集页：页面里挖节目 RSS，按 slug 对号入座。
+
+    这类页面是 Spotify for Podcasters（前身 Anchor），不在 open.spotify.com 的
+    ID 体系里，yt-dlp 也没有对应抽取器。但只要节目对外分发，页面里就嵌着
+    anchor.fm 的 RSS 直链，feed 里的 enclosure 是可以直接下载的音频——
+    完全不用碰 Spotify 的加密流。
+    """
+    try:
+        html = http.get_text(cfg, url)
+    except Exception:  # noqa: BLE001 - 和 get_json 同一个套路：重探出口再试一次
+        from ...net.probe import reachability
+
+        probe = reachability(cfg, url, timeout=min(6.0, cfg.fetch_timeout))
+        if not probe.get("ok"):
+            raise DownloadFailure(probe.get("error") or "creators.spotify.com 页面抓不到，网络层全堵。")
+        try:
+            html = http.get_text(cfg, url)
+        except Exception as exc:  # noqa: BLE001
+            raise DownloadFailure(explain_error(exc, url, cfg)) from exc
+    feed_match = ANCHOR_RSS.search(html)
+    if not feed_match:
+        raise DownloadFailure(
+            "认出了 creators/podcasters.spotify.com 的单集页，但页面里没找到节目的 RSS 地址，"
+            "多半是这个节目只在 Spotify 内部分发。可以在 Spotify 客户端下载该集后上传音频文件。"
+        )
+    feed_url = feed_match.group(0)
+    import feedparser
+
+    feed = feedparser.parse(feed_url)
+    entry = next(
+        (e for e in feed.entries or [] if slug in (e.get("link") or "")),
+        None,
+    )
+    if entry is None:
+        raise DownloadFailure(
+            f"节目《{feed.feed.get('title') or '未知'}》的 RSS（共 {len(feed.entries or [])} 集）"
+            f"里没有这一集（{slug[:40]}…）。可能是刚发布还没同步到 feed，或该集已下架。"
+        )
+    audio_url = entry_audio(entry)
+    if not audio_url:
+        raise DownloadFailure("在 RSS 里找到了这一集，但没有音频 enclosure，无法直接下载。")
+    return PodcastTarget(
+        title=entry.get("title"),
+        show=feed.feed.get("title"),
+        published_at=entry.get("published"),
+        feed_url=feed_url,
+        audio_url=audio_url,
+        route="creators-page → anchor-rss → rss-enclosure",
     )

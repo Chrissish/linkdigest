@@ -25,6 +25,7 @@ from pydantic import BaseModel
 
 from . import bootstrap
 from .app import service
+from .app.pipeline import rerun_understand as rerun_understand_stage
 from .app.pipeline import run_job
 from .capabilities.speech import available_engines, preview_engine
 from .config import ConfigError, Settings, load
@@ -111,6 +112,17 @@ def _asr_banner() -> str:
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    # 上一次进程退出时正在跑的任务不会有人接着跑：线程随进程没了，状态却停在
+    # running/queued。不恢复的话前端会一直转圈，重跑接口也会拿 409 挡住用户。
+    stale = store.list(statuses=("queued", "running"), limit=100)
+    for job in stale:
+        store.update(
+            job.id,
+            status="failed",
+            error="服务重启时任务仍在执行，已中断；请重试",
+        )
+    if stale:
+        print(f"[linkdigest] 已把 {len(stale)} 个中断任务标记为失败（可重试）", flush=True)
     effective = proxy.current()
     print(
         f"[linkdigest] 出口代理 {effective or cfg.system_proxy or '（未设置，直连）'}"
@@ -125,7 +137,7 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(title="LinkDigest", version=cfg.pipeline_version, lifespan=lifespan)
 store = Store(cfg)
-pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="job")
+pool = ThreadPoolExecutor(max_workers=cfg.job_workers, thread_name_prefix="job")
 
 
 @app.get("/api/health")
@@ -296,6 +308,31 @@ def apply(job_id: str, payload: AnswerPayload | None = None) -> dict:
     except (ValueError, KeyError) as exc:
         raise HTTPException(400, f"答案不合格：{exc}") from exc
     return {"ok": True, **job_view(store, store.get(job_id))}
+
+
+@app.post("/api/jobs/{job_id}/understand")
+def rerun_understand(job_id: str) -> dict:
+    """对降级/部分完成/失败的任务单独重跑理解阶段（复用已有转写，不重新下载与转写）。
+
+    失败任务里卡死在理解阶段的（有转写产物）也允许走这里——整链重试会白付
+    一次下载加转写的时间。有没有转写产物是唯一门槛，状态只挡「正在执行」。
+    """
+    job = store.get(job_id)
+    if job is None:
+        raise HTTPException(404, "job 不存在")
+    if job.status in ("queued", "running"):
+        raise HTTPException(409, "任务正在执行，等它结束")
+    if not store.job_path(job_id, "transcript.json").exists():
+        raise HTTPException(400, "这个任务没有转写产物，请重试整个链接")
+    pool.submit(_rerun, store, job_id)
+    return job_view(store, store.get(job_id))
+
+
+def _rerun(job_store: Store, job_id: str) -> None:
+    try:
+        rerun_understand_stage(job_store, job_id)
+    except Exception:  # noqa: BLE001 —— 失败已在 rerun_understand_stage 里落库并保留旧报告
+        pass
 
 
 @app.get("/api/jobs/{job_id}/html", response_class=HTMLResponse)

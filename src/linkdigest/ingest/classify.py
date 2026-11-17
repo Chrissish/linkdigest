@@ -16,6 +16,7 @@ from .platforms import (
     AUDIO_PLATFORMS,
     MEDIA_EXT,
     PLATFORMS,
+    SPOTIFY_CREATORS,
     SPOTIFY_ID,
     VIDEO_PLATFORMS,
 )
@@ -68,6 +69,14 @@ def canonicalize(url: str) -> str:
     # Spotify 的 ?si= 是分享追踪串、/intl-xx/ 是语言前缀，同一集会有多种写法，
     # 不清掉就会算出不同的 bundle_id，同一内容重复入库。
     if host.endswith("spotify.com"):
+        # creators / podcasters / profile / show 四种写法都是同一集，
+        # 归一到 podcasters 形式，否则同一集会算出不同 bundle_id 重复入库。
+        creators = SPOTIFY_CREATORS.search(url)
+        if creators:
+            return (
+                "https://podcasters.spotify.com/pod/show/"
+                f"{creators.group('user')}/episodes/{creators.group('slug')}"
+            )
         match = SPOTIFY_ID.search(url)
         if match:
             return f"https://open.spotify.com/{match.group('kind')}/{match.group('id')}"

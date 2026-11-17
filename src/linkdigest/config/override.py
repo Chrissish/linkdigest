@@ -52,6 +52,17 @@ def _optional(raw: str) -> str | None:
     return text or None
 
 
+def _optional_bool(raw: str) -> bool | None:
+    text = raw.strip().lower()
+    if not text:
+        return None
+    if text in {"1", "true", "yes", "on"}:
+        return True
+    if text in {"0", "false", "no", "off"}:
+        return False
+    raise ConfigError(f"llm.thinking 只接受 1/0、true/false、on/off，收到 {raw!r}")
+
+
 # 键 → (模型字段, 转换器)。只列白名单内的。
 _FIELDS: dict[str, tuple[str, Callable[[str], Any]]] = {
     "asr.engine": ("asr_engine", _text),
@@ -66,6 +77,7 @@ _FIELDS: dict[str, tuple[str, Callable[[str], Any]]] = {
     "llm.timeout": ("llm_timeout", _float),
     "llm.chunk_chars": ("llm_chunk_chars", _int),
     "llm.temperature": ("llm_temperature", _float),
+    "llm.thinking": ("llm_thinking", _optional_bool),
     "fetch.timeout": ("fetch_timeout", _float),
     "max_download_mb": ("max_download_mb", _int),
     "cookies.from_browser": ("cookies_from_browser", _optional),
@@ -85,6 +97,7 @@ _ENV_ALIASES = {
     "LLM_TIMEOUT": "llm.timeout",
     "LLM_CHUNK_CHARS": "llm.chunk_chars",
     "LLM_TEMPERATURE": "llm.temperature",
+    "LLM_THINKING": "llm.thinking",
     "FETCH_TIMEOUT": "fetch.timeout",
     "MAX_DOWNLOAD_MB": "max_download_mb",
     "COOKIES_FROM_BROWSER": "cookies.from_browser",

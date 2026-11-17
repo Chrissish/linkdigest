@@ -60,6 +60,13 @@ SPOTIFY_ID = re.compile(
     r"/(?P<id>[A-Za-z0-9]{22})",
     re.I,
 )
+# Spotify for Podcasters（前身 Anchor）的单集页：creators 和 podcasters 两个域名、
+# profile 和 show 两种用户前缀都见过。这类页面不在 open.spotify.com 的 ID 体系里。
+SPOTIFY_CREATORS = re.compile(
+    r"(?:creators|podcasters)\.spotify\.com/pod/(?:profile|show)/(?P<user>[^/?#]+)"
+    r"/episodes/(?P<slug>[^/?#]+)",
+    re.I,
+)
 APPLE_PODCAST_ID = re.compile(r"id(?P<show>\d{6,})(?:.*?[?&]i=(?P<episode>\d{8,}))?", re.S)
 
 ITUNES_SEARCH = "https://itunes.apple.com/search"

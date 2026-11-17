@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import json
+import threading
 import time
 
 from .. import ingest
@@ -16,8 +17,9 @@ from ..capabilities import ffmpeg
 from ..capabilities.llm import LLMClient
 from ..capabilities.speech import transcribe
 from ..clean import assign_idx, normalize_segments, text_to_segments
+from ..config import Settings
 from ..contracts.builder import build_bundle
-from ..contracts.models import MediaMeta, SourceMeta
+from ..contracts.models import MediaMeta, SourceMeta, TranscriptBundle
 from ..contracts.validation import validate_bundle
 from ..conventions.files import sha256_file
 from ..conventions.jsonio import write_json
@@ -71,6 +73,36 @@ class Stage:
             },
         )
         return None
+
+
+def _understand_with_timeout(
+    cfg: Settings, bundle: TranscriptBundle, client: LLMClient
+) -> tuple[Any, Any]:
+    """build_report 的看门狗。
+
+    理解阶段曾在无网络请求、无文件写入的状态下挂死过（疑似线程池丢工）——
+    httpx 的请求级超时救不了「没有请求在飞」的挂死，只能靠整阶段硬上限兜底。
+    超时把任务判失败（可重试）；挂死的线程随进程存活，重启才回收。
+    """
+    result: dict[str, Any] = {}
+
+    def work() -> None:
+        try:
+            result["value"] = build_report(cfg, bundle, client)
+        except BaseException as exc:  # noqa: BLE001 —— 原样转交，别在这里判成败
+            result["error"] = exc
+
+    worker = threading.Thread(target=work, daemon=True, name="understand")
+    worker.start()
+    worker.join(cfg.understand_timeout)
+    if worker.is_alive():
+        raise RuntimeError(
+            f"理解阶段超过 {cfg.understand_timeout:.0f} 秒没有完成，看门狗中止"
+            "（详见任务目录 llm_debug.jsonl 最后一条；这个任务可以重试）"
+        )
+    if "error" in result:
+        raise result["error"]
+    return result["value"]
 
 
 def run_job(store: Store, job_id: str) -> None:
@@ -164,9 +196,9 @@ def run_job(store: Store, job_id: str) -> None:
             if duration_sec:
                 store.update(job_id, duration_sec=duration_sec)
 
-        client = LLMClient(cfg)
+        client = LLMClient(cfg, debug_log=store.job_path(job_id, "llm_debug.jsonl"))
         with Stage(store, job_id, "understand"):
-            report, run = build_report(cfg, bundle, client)
+            report, run = _understand_with_timeout(cfg, bundle, client)
             store.update(
                 job_id,
                 llm_model=cfg.llm_model if client.available else None,
@@ -213,3 +245,73 @@ def run_job(store: Store, job_id: str) -> None:
     finally:
         # 无论成败，目录名都变得可读：时间_平台_标题_job_id
         finalize(store, job_id)
+
+
+def rerun_understand(store: Store, job_id: str) -> None:
+    """对已有转写产物的任务单独重跑「理解 → 报告」。
+
+    降级（无密钥 / 调用失败）不算失败，任务状态仍是 done——所以这次重跑
+    失败时也不把任务打成 failed，只记错误并保留上一版报告。
+    """
+    cfg = store.cfg
+    if store.get(job_id) is None:
+        raise RuntimeError("任务不存在")
+    bundle_path = store.job_path(job_id, "transcript.json")
+    if not bundle_path.exists():
+        raise RuntimeError("这个任务没有转写产物，无法单独重跑理解，请重试整个链接")
+
+    try:
+        bundle = TranscriptBundle.model_validate(json.loads(bundle_path.read_text(encoding="utf-8")))
+        client = LLMClient(cfg, debug_log=store.job_path(job_id, "llm_debug.jsonl"))
+        with Stage(store, job_id, "understand"):
+            report, run = _understand_with_timeout(cfg, bundle, client)
+            store.update(
+                job_id,
+                llm_model=cfg.llm_model if client.available else None,
+                degraded=0 if not report.degraded else 1,
+                cost_usd=client.stats.cost_usd,
+            )
+        with Stage(store, job_id, "report"):
+            write_json(store.job_path(job_id, "report.json"), json.loads(report.model_dump_json()))
+            created = store.get(job_id)
+            save_report(
+                store,
+                job_id,
+                bundle,
+                report,
+                extra={
+                    "llm_stats": client.stats.as_dict(),
+                    "mode": run.mode,
+                    "job_id": job_id,
+                    "created_at": created.created_at if created else None,
+                },
+            )
+            # 用量在上一轮基础上累加，重跑烧掉的 token 不从账本上消失
+            usage = {
+                "llm": client.stats.as_dict(),
+                "mode": run.mode,
+                "chunks": run.chunks,
+                "dir": store.dir_name(store.get(job_id)),
+                "stages": [s for s in read_stages(store, job_id) if s.get("stage") != "error"],
+            }
+            prev_path = store.job_path(job_id, "usage.json")
+            if prev_path.exists():
+                try:
+                    prev = json.loads(prev_path.read_text(encoding="utf-8"))
+                    old = prev.get("llm") or {}
+                    cur = usage["llm"]
+                    for key in ("calls", "prompt_tokens", "completion_tokens"):
+                        cur[key] = cur.get(key, 0) + old.get(key, 0)
+                    cur["seconds"] = cur.get("seconds", 0.0) + old.get("seconds", 0.0)
+                    cur["cost_usd"] = round(cur.get("cost_usd", 0.0) + old.get("cost_usd", 0.0), 6)
+                    cur["errors"] = (old.get("errors") or []) + cur.get("errors") or []
+                    usage["previous_mode"] = prev.get("mode")
+                except (json.JSONDecodeError, KeyError):
+                    pass
+            write_json(store.job_path(job_id, "usage.json"), usage)
+        store.update(job_id, status="done", stage="done", progress=1.0, error=None)
+    except Exception as exc:
+        # 不推翻已完成的任务状态，但要让前端和阶段日志都看得见这次失败
+        append_stage(store, job_id, {"stage": "error", "error": str(exc)})
+        store.update(job_id, status="done", stage="understand", error=f"重新理解失败：{exc}")
+        raise

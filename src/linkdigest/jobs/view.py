@@ -31,4 +31,6 @@ def job_view(store: "Store", job: Job) -> dict[str, Any]:
         "cost_usd": job.cost_usd,
         "created_at": job.created_at,
         "updated_at": job.updated_at,
+        # 失败任务能不能只重跑理解：有转写产物就行，前端据此出按钮
+        "has_transcript": store.job_path(job.id, "transcript.json").exists(),
     }

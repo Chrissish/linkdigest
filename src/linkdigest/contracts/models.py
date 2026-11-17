@@ -126,7 +126,7 @@ class Report(_Base):
     # —— 自由层：深度由内容决定，不设字数上限 ——
     intent: str = ""  # 这份报告给谁看、要回答什么问题
     body: str = ""  # 自由 Markdown 正文（深读用）
-    appendix: str = ""  # 内容特有结构：时间线 / 代码 / 人物表 / 对照表
+    appendix: str = ""  # 内容特有结构：表格 / 代码 / 人物表 / 对照表；禁止时间线（sections 已带时间码）
     # —— 可选层：有则写，无则空 ——
     tldr: list[str] = Field(default_factory=list)
     # 已废弃：与 tldr 重复。保留字段只为读得进老 report.json，不再产出、不再渲染。

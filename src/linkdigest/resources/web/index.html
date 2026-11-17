@@ -52,82 +52,109 @@
 </section>
 <header class="top">
   <div class="brand">
+    <button type="button" class="rail-toggle" id="toggle-left" title="展开 / 收起任务面板">
+      <svg viewBox="0 0 16 16" width="14" height="14"><path d="M6 3 2 8l4 5M14 3l-4 5 4 5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
     <span class="mark"></span>
     <span class="name">LinkDigest</span>
     <span class="ver" id="ver" hidden></span>
   </div>
   <div class="pills" id="pills"></div>
+  <button type="button" class="rail-toggle" id="toggle-right" title="展开 / 收起历史面板">
+    <svg viewBox="0 0 16 16" width="14" height="14"><path d="M2 3l4 5-4 5M10 3l4 5-4 5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+  </button>
 </header>
 
-<main>
-  <section class="composer">
-    <form id="form" autocomplete="off">
-      <input id="url" type="text" placeholder="粘贴视频 / 播客 / 文章链接，或选择本地文件" spellcheck="false">
-      <button type="submit" id="go">生成总结</button>
-      <label class="ghost" for="file">上传文件</label>
-      <input id="file" type="file" accept="audio/*,video/*" hidden>
-    </form>
-    <p class="hint">
-      视频与音频同路：只抽音轨做 ASR，不抓帧、不做画面理解。图文源走正文抽取 + 可选 OCR。
-    </p>
-  </section>
+<div class="layout" id="layout">
+  <aside class="side left" id="side-left">
+    <div class="side-body">
+      <section class="composer">
+        <form id="form" autocomplete="off">
+          <input id="url" type="text" placeholder="粘贴链接，可一次贴多个（换行 / 分号 / 逗号分隔）" spellcheck="false">
+          <button type="submit" id="go">开始</button>
+          <label class="ghost" for="file">上传文件</label>
+          <input id="file" type="file" accept="audio/*,video/*" hidden>
+        </form>
+        <p class="hint">视频只取音轨做 ASR；图文走正文抽取 + OCR。链接多会自动排队并行处理。</p>
+      </section>
 
-  <section id="empty" class="empty">
-    <div class="empty-grid">
-      <div class="empty-card">
-        <span class="k">01</span>
-        <h4>贴链接</h4>
-        <p>视频、播客、文章都行。视频只取音轨，不做画面理解。</p>
+      <section id="active" hidden>
+        <h3 class="side-label">执行中<span class="h-total" id="active-count"></span></h3>
+        <ul id="active-list" class="active-list"></ul>
+      </section>
+    </div>
+  </aside>
+
+  <main class="main" id="main">
+    <section id="empty" class="empty">
+      <div class="empty-intro">
+        <h2>贴进链接，拿到一份能读的报告</h2>
+        <p>YouTube / B站 / 播客 / 公众号 / 普通网页，一次可以贴多个，任务会自动排队。
+          全流程在本地跑：抽音轨 → Whisper 转写 → 分层理解 → 带时间码的报告。</p>
       </div>
-      <div class="empty-card">
-        <span class="k">02</span>
-        <h4>等转写</h4>
-        <p>本地全开源管道：ffmpeg 抽音轨 → Whisper 转写 → 规则清洗。</p>
+      <div class="empty-grid">
+        <div class="empty-card">
+          <span class="k">01</span>
+          <h4>贴链接</h4>
+          <p>左侧输入框支持换行、分号分隔的批量提交；音频视频同路，只取音轨，不做画面理解。</p>
+        </div>
+        <div class="empty-card">
+          <span class="k">02</span>
+          <h4>看进度</h4>
+          <p>执行中的任务卡片实时显示阶段与耗时；失败的带一键重试，不用重新粘贴。</p>
+        </div>
+        <div class="empty-card">
+          <span class="k">03</span>
+          <h4>读报告</h4>
+          <p>报告在中栏阅读：分段索引、原话引用、数据点都带时间码可回查，可导出 HTML / Markdown。</p>
+        </div>
       </div>
-      <div class="empty-card">
-        <span class="k">03</span>
-        <h4>读报告</h4>
-        <p>分段索引、原话引用，全部带时间码可回查。</p>
+      <div class="examples">
+        <span>试试：</span>
+        <button class="example" data-tip="https://www.bilibili.com/video/BV1GJ411x7h7">B站视频链接</button>
+        <button class="example" data-tip="https://mp.weixin.qq.com/s/xxxxxxxx">公众号文章</button>
+        <button class="example" data-tip="https://feeds.simplecast.com/54nAGcIl">播客 RSS</button>
       </div>
-    </div>
-    <div class="examples">
-      <span>试试：</span>
-      <button class="example" data-tip="https://www.bilibili.com/video/BV1GJ411x7h7">B站视频链接</button>
-      <button class="example" data-tip="https://mp.weixin.qq.com/s/xxxxxxxx">公众号文章</button>
-      <button class="example" data-tip="https://feeds.simplecast.com/54nAGcIl">播客 RSS</button>
-    </div>
-  </section>
+    </section>
 
-  <section id="status" class="status" hidden>
-    <div class="status-head">
-      <span id="stage">排队</span>
-      <span id="pct">0%</span>
-    </div>
-    <div class="bar"><i id="fill"></i></div>
-    <ul id="timings" class="timings"></ul>
-  </section>
+    <article id="report" class="report"></article>
+  </main>
 
-  <section id="history" class="history" hidden>
-    <div class="history-head">
-      <h3>历史任务<span class="h-total" id="h-total"></span></h3>
-      <nav class="filters" id="filters"></nav>
+  <aside class="side right" id="side-right">
+    <div class="side-body">
+      <section id="history" class="history" hidden>
+        <div class="history-head">
+          <h3>历史任务<span class="h-total" id="h-total"></span></h3>
+          <nav class="filters" id="filters"></nav>
+        </div>
+        <div class="bulk" id="bulk">
+          <label class="pick-all">
+            <input type="checkbox" id="pick-all">
+            <span id="pick-all-text">全选</span>
+          </label>
+          <span class="bulk-count" id="bulk-count"></span>
+          <span class="bulk-msg" id="hist-msg"></span>
+          <button type="button" class="bulk-del" id="bulk-del" disabled>删除所选</button>
+        </div>
+        <ul id="history-list" class="jobs"></ul>
+        <p class="hist-empty" id="hist-empty" hidden></p>
+        <button type="button" class="more" id="more" hidden>加载更多</button>
+      </section>
     </div>
-    <div class="bulk" id="bulk">
-      <label class="pick-all">
-        <input type="checkbox" id="pick-all">
-        <span id="pick-all-text">全选</span>
-      </label>
-      <span class="bulk-count" id="bulk-count"></span>
-      <span class="bulk-msg" id="hist-msg"></span>
-      <button type="button" class="bulk-del" id="bulk-del" disabled>删除所选</button>
-    </div>
-    <ul id="history-list" class="jobs"></ul>
-    <p class="hist-empty" id="hist-empty" hidden></p>
-    <button type="button" class="more" id="more" hidden>加载更多</button>
-  </section>
+  </aside>
+</div>
 
-  <article id="report" class="report"></article>
-</main>
+<nav class="tabbar" id="tabbar" hidden>
+  <button type="button" class="tab on" data-tab="report" title="当前报告">
+    <svg viewBox="0 0 20 20" width="20" height="20"><path d="M5 2.5h7l3.5 3.5v11.5h-10.5z M12 2.5v4h4 M7.5 10h5 M7.5 13h5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
+  </button>
+  <button type="button" class="tab" data-tab="add" title="添加任务">
+    <svg viewBox="0 0 20 20" width="20" height="20"><circle cx="10" cy="10" r="7.5" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M10 6.5v7M6.5 10h7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+  </button>
+  <button type="button" class="tab" data-tab="history" title="历史任务">
+    <svg viewBox="0 0 20 20" width="20" height="20"><circle cx="10" cy="10" r="7.5" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M10 5.5V10l3 2" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+  </button>
+</nav>
 
 <script src="static/app.js"></script>
 </body>

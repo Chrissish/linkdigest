@@ -58,7 +58,7 @@ def build_report(
         chapters=chapters_block(bundle),
     )
     try:
-        payload = client.chat_json(prompts.reduce_system(), user, max_tokens=6000)
+        payload = client.chat_json(prompts.reduce_system(bundle), user, max_tokens=6000)
     except LLMError as exc:
         client.stats.errors.append(f"reduce: {exc}")
         report = degraded_report(bundle)

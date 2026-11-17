@@ -6,16 +6,18 @@
 
 from __future__ import annotations
 
-import json
 import re
 import sys
 from datetime import datetime
 from pathlib import Path
 
 from ..contracts.models import TranscriptBundle
+from ..contracts.spec import required_schema, spec_text
 from ..conventions.resources import text as resource_text
 from ..conventions.timecode import ts
 from .paths import ANSWER, INLINE_LIMIT
+
+__all__ = ["build_brief", "chapters_block", "meta_table", "required_schema", "split_parts", "transcript_lines"]
 
 
 def meta_table(bundle: TranscriptBundle, job_id: str, directory: Path) -> str:
@@ -83,11 +85,6 @@ def split_parts(lines: list[str], budget: int = INLINE_LIMIT) -> list[str]:
     return parts
 
 
-def required_schema() -> dict:
-    """必填五件套。模板只放这些——塞满字段会鼓励凑数。"""
-    return json.loads(resource_text("templates/answer.template.json"))
-
-
 def _transcript_body(parts: list[str]) -> str:
     if len(parts) > 1:
         return "正文较长，已切片，见 `handoff/part-*.md`。\n"
@@ -115,17 +112,8 @@ def build_brief(bundle: TranscriptBundle, job_id: str, directory: Path) -> str:
         "run_command": f"{sys.executable} -m linkdigest.cli {job_id} --apply",
         "meta_table": meta_table(bundle, job_id, directory),
         "parts_note": _parts_note(parts),
-        "required_schema": json.dumps(required_schema(), ensure_ascii=False, indent=2),
-        "sections_hint": (
-            ""
-            if timeline
-            else "\n  **这条内容是文章，没有时间轴，`start`/`end` 留空即可**，`sections` 只用来分节。"
-        ),
-        "timecode_rule": (
-            "时间码只用正文里出现过的值，格式 `mm:ss`（超过一小时用 `h:mm:ss`）。"
-            if timeline
-            else "这条内容是文章，没有时间轴，所有 `start`/`end` 字段留空或省略。"
-        ),
+        # 产出契约与管线共用一份：templates/spec.md 由 contracts.spec 渲染
+        "spec": spec_text(timeline),
         "chapters": chapters_block(bundle),
         "transcript_body": _transcript_body(parts),
         "generated_at": datetime.now().astimezone().strftime("%Y-%m-%d %H:%M"),

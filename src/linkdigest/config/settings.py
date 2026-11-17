@@ -69,8 +69,15 @@ class Settings(BaseModel):
     llm_timeout: float = Field(default=120.0, gt=0)
     llm_chunk_chars: int = Field(default=6000, ge=500)
     llm_temperature: float = Field(default=0.2, ge=0, le=2)
+    # 思考模式开关（DeepSeek 系）：None=不发该字段（跟厂商默认走），
+    # True/False 显式开/关。带思考的模型会先烧推理 token，长转写分块下
+    # max_tokens 容易不够；结构化摘要任务关掉又快又省。
+    llm_thinking: bool | None = None
     llm_price_in: float = Field(default=0.15, ge=0)
     llm_price_out: float = Field(default=0.60, ge=0)
+    # 理解阶段看门狗：整个 build_report 的硬上限。线程挂死（pool 丢工、锁丢失）
+    # 时 httpx 的请求级超时救不了——没有任何在飞的请求可超时。到点判失败，可重试。
+    understand_timeout: float = Field(default=1800.0, gt=0)
 
     # 采集
     fetch_timeout: float = Field(default=30.0, gt=0)
@@ -81,6 +88,11 @@ class Settings(BaseModel):
     # 出口
     proxy: str | None = None
     system_proxy: str | None = None
+
+    # 服务
+    # 同时在跑的任务数上限。瓶颈在 ASR：mlx-whisper 走 Metal，
+    # 调大了多任务会抢 GPU，不会出错但互相拖慢。
+    job_workers: int = Field(default=5, ge=1, le=32)
 
     pipeline_version: str = __version__
 
@@ -199,6 +211,19 @@ def _api_key() -> SecretStr | None:
     return SecretStr(raw) if raw else None
 
 
+def _env_thinking() -> bool | None:
+    """LLM_THINKING：1/true/yes=开，0/false/no=关，未设=跟厂商默认。"""
+    raw = env("LLM_THINKING")
+    if raw is None or not raw.strip():
+        return None
+    text = raw.strip().lower()
+    if text in {"1", "true", "yes", "on"}:
+        return True
+    if text in {"0", "false", "no", "off"}:
+        return False
+    raise ValueError(f"LLM_THINKING 的值看不懂：{raw!r}（可用 1/0、true/false、on/off）")
+
+
 def load() -> Settings:
     """从环境与 .env 组装一份配置。坏值直接抛 ConfigError，不静默回落。"""
     try:
@@ -218,17 +243,22 @@ def load() -> Settings:
             llm_timeout=env_float("LLM_TIMEOUT", 120.0),
             llm_chunk_chars=env_int("LLM_CHUNK_CHARS", 6000),
             llm_temperature=env_float("LLM_TEMPERATURE", 0.2),
+            llm_thinking=_env_thinking(),
             llm_price_in=env_float("LLM_PRICE_IN", 0.15),
             llm_price_out=env_float("LLM_PRICE_OUT", 0.60),
+            understand_timeout=env_float("UNDERSTAND_TIMEOUT", 1800.0),
             fetch_timeout=env_float("FETCH_TIMEOUT", 30.0),
             max_download_mb=env_int("MAX_DOWNLOAD_MB", 2048),
             cookies_from_browser=env("COOKIES_FROM_BROWSER"),
             cookies_file=_cookies_file(),
             proxy=_resolve_proxy(),
             system_proxy=SYSTEM_PROXY,
+            job_workers=env_int("JOB_WORKERS", 5),
         )
     except ValidationError as exc:
         raise ConfigError("配置不合格：" + format_errors(exc)) from exc
+    except ValueError as exc:
+        raise ConfigError(f"配置不合格：{exc}") from exc
 
 
 def _resolve_proxy() -> str | None:
