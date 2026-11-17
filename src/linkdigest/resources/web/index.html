@@ -108,8 +108,22 @@
   </section>
 
   <section id="history" class="history" hidden>
-    <h3>最近</h3>
-    <div id="history-list" class="chips"></div>
+    <div class="history-head">
+      <h3>历史任务<span class="h-total" id="h-total"></span></h3>
+      <nav class="filters" id="filters"></nav>
+    </div>
+    <div class="bulk" id="bulk">
+      <label class="pick-all">
+        <input type="checkbox" id="pick-all">
+        <span id="pick-all-text">全选</span>
+      </label>
+      <span class="bulk-count" id="bulk-count"></span>
+      <span class="bulk-msg" id="hist-msg"></span>
+      <button type="button" class="bulk-del" id="bulk-del" disabled>删除所选</button>
+    </div>
+    <ul id="history-list" class="jobs"></ul>
+    <p class="hist-empty" id="hist-empty" hidden></p>
+    <button type="button" class="more" id="more" hidden>加载更多</button>
   </section>
 
   <article id="report" class="report"></article>

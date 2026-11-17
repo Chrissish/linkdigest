@@ -26,9 +26,19 @@ const reportEl = $("#report");
 const historyBox = $("#history");
 const historyList = $("#history-list");
 const emptyBox = $("#empty");
+const filtersEl = $("#filters");
+const pickAll = $("#pick-all");
+const pickAllText = $("#pick-all-text");
+const bulkCount = $("#bulk-count");
+const bulkDel = $("#bulk-del");
+const histMsg = $("#hist-msg");
+const histEmpty = $("#hist-empty");
+const moreBtn = $("#more");
+const totalEl = $("#h-total");
 
 let timer = null;
 let currentJob = null;
+let viewedJobId = null; // 当前正在展示状态/报告的任务，删掉它时要把展示区一起清掉
 
 const OFFLINE_HINT = location.protocol === "file:"
   ? "页面是用 file:// 打开的，后端根本没在跑。先 cd linkdigest && ./scripts/run.sh，再访问 http://127.0.0.1:8787/"
@@ -159,6 +169,7 @@ function stopPolling() {
 function startPolling(jobId) {
   stopPolling();
   currentJob = jobId;
+  viewedJobId = jobId;
   timer = setInterval(() => poll(jobId).catch((err) => {
     stopPolling();
     goBtn.disabled = false;
@@ -287,31 +298,279 @@ async function submitFile(file) {
   }
 }
 
+/* ── 历史任务：列表 + 状态筛选 + 多选删除 ───────────────────────── */
+
+const STATUS_LABEL = { queued: "排队", running: "进行中", done: "完成", failed: "失败" };
+const FILTERS = [
+  { key: "all", label: "全部" },
+  { key: "active", label: "进行中" },
+  { key: "done", label: "完成" },
+  { key: "failed", label: "失败" },
+];
+
+// selected 的作用域是「当前筛选的这一页」：换筛选即清空，全选也只作用于可见行
+const history = { status: "all", limit: 50, jobs: [], counts: {}, selected: new Set() };
+
+function escapeHtml(text) {
+  return String(text ?? "").replace(/[&<>"']/g, (c) => (
+    { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]
+  ));
+}
+
+function hhmmss(sec) {
+  const total = Math.round(sec);
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  const pad = (n) => String(n).padStart(2, "0");
+  return h ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`;
+}
+
+function stamp(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const now = new Date();
+  const hm = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  const sameYear = d.getFullYear() === now.getFullYear();
+  const md = `${d.getMonth() + 1}/${d.getDate()}`;
+  return sameYear ? `${md} ${hm}` : `${d.getFullYear()}/${md} ${hm}`;
+}
+
+function metaBits(job) {
+  const bits = [];
+  if (job.platform) bits.push(job.platform);
+  if (job.duration_sec) bits.push(hhmmss(job.duration_sec));
+  if (job.chars) bits.push(`${job.chars >= 1000 ? (job.chars / 1000).toFixed(1) + "k" : job.chars} 字`);
+  if (job.degraded) bits.push("待外部理解");
+  const when = stamp(job.created_at);
+  if (when) bits.push(when);
+  return bits;
+}
+
+function historyMsg(text, tone) {
+  histMsg.textContent = text || "";
+  histMsg.className = `bulk-msg ${tone || ""}`;
+  clearTimeout(historyMsg._timer);
+  if (text) historyMsg._timer = setTimeout(() => { histMsg.textContent = ""; }, 6000);
+}
+
 async function loadHistory() {
   try {
-    const jobs = await api("/api/jobs?limit=12");
-    const done = jobs.filter((j) => j.status === "done" || j.status === "failed");
-    if (!done.length) return;
-    historyBox.hidden = false;
-    historyList.innerHTML = "";
-    for (const job of done) {
-      const chip = document.createElement("button");
-      chip.className = `chip ${job.status === "failed" ? "miss" : ""}`;
-      const stamp = (job.created_at || "").slice(11, 16);
-      const flag = job.degraded ? " · 待理解" : "";
-      chip.textContent = `${job.title || job.input}${stamp ? ` · ${stamp}` : ""}${flag}`;
-      chip.title = `${job.dir || job.id}\n${job.input}`;
-      chip.addEventListener("click", async () => {
-        reportEl.innerHTML = "";
-        renderStatus(job);
-        if (job.status === "done") await showReport(job);
-      });
-      historyList.appendChild(chip);
+    const data = await api(`/api/jobs?status=${history.status}&limit=${history.limit}`);
+    history.jobs = data.jobs || [];
+    history.counts = data.counts || {};
+    const alive = new Set(history.jobs.map((job) => job.id));
+    for (const id of [...history.selected]) {
+      if (!alive.has(id)) history.selected.delete(id);
     }
+    renderHistory();
   } catch (err) {
     /* 历史不重要，静默失败 */
   }
 }
+
+function renderHistory() {
+  const counts = history.counts || {};
+  const total = counts.all || 0;
+  // 一条任务都没有时整块不出现，把版面让给新手引导
+  historyBox.hidden = total === 0;
+  if (total === 0) return;
+  totalEl.textContent = `${total}`;
+
+  filtersEl.innerHTML = "";
+  for (const f of FILTERS) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = `filter${history.status === f.key ? " on" : ""}`;
+    btn.innerHTML = `${f.label}<span class="n">${counts[f.key] ?? 0}</span>`;
+    btn.onclick = () => {
+      if (history.status === f.key) return;
+      history.status = f.key;
+      history.limit = 50;
+      history.selected.clear();
+      disarmBulk();
+      historyMsg("");
+      loadHistory();
+    };
+    filtersEl.appendChild(btn);
+  }
+
+  historyList.innerHTML = "";
+  for (const job of history.jobs) historyList.appendChild(jobRow(job));
+  histEmpty.hidden = history.jobs.length > 0;
+  histEmpty.textContent = counts[history.status] === 0 ? "这个筛选下没有任务。" : "";
+  moreBtn.hidden = history.jobs.length < history.limit || history.jobs.length >= (counts[history.status] ?? 0);
+  moreBtn.textContent = `加载更多（已显示 ${history.jobs.length} / ${counts[history.status] ?? 0}）`;
+  syncBulk();
+}
+
+function jobRow(job) {
+  const li = document.createElement("li");
+  li.className = `job ${job.status}`;
+  li.dataset.id = job.id;
+
+  const pick = document.createElement("label");
+  pick.className = "pick";
+  pick.title = "选中后可批量删除";
+  const box = document.createElement("input");
+  box.type = "checkbox";
+  box.checked = history.selected.has(job.id);
+  box.onchange = () => {
+    if (box.checked) history.selected.add(job.id);
+    else history.selected.delete(job.id);
+    disarmBulk();
+    syncBulk();
+  };
+  pick.appendChild(box);
+
+  const main = document.createElement("div");
+  main.className = "job-main";
+
+  const title = document.createElement("button");
+  title.type = "button";
+  title.className = "job-title";
+  title.textContent = job.title || job.input;
+  title.title = job.input;
+  title.onclick = () => openJob(job);
+
+  const meta = document.createElement("div");
+  meta.className = "job-meta";
+  meta.innerHTML = [
+    `<span class="state">${STATUS_LABEL[job.status] || job.status}</span>`,
+    ...metaBits(job).map((bit) => `<span>${escapeHtml(bit)}</span>`),
+  ].join('<i class="sep">·</i>');
+
+  main.append(title, meta);
+
+  const actions = document.createElement("div");
+  actions.className = "job-actions";
+  const open = document.createElement("button");
+  open.type = "button";
+  open.textContent = "打开";
+  open.onclick = () => openJob(job);
+  const del = document.createElement("button");
+  del.type = "button";
+  del.className = "del";
+  del.textContent = "删除";
+  if (job.status === "queued" || job.status === "running") {
+    del.disabled = true;
+    del.title = "任务还在跑，等它结束或失败后再删";
+  } else {
+    del.onclick = () => confirmThen(del, () => deleteJobs([job.id]));
+  }
+  actions.append(open, del);
+
+  li.append(pick, main, actions);
+  return li;
+}
+
+async function openJob(job) {
+  reportEl.innerHTML = "";
+  emptyBox.hidden = true;
+  viewedJobId = job.id;
+  renderStatus(job);
+  if (job.status === "done") {
+    await showReport(job);
+  } else if (job.status === "queued" || job.status === "running") {
+    startPolling(job.id);
+  }
+}
+
+function syncBulk() {
+  const shown = history.jobs.length;
+  const picked = history.selected.size;
+  bulkCount.textContent = picked ? `已选 ${picked} / ${shown}` : "";
+  bulkDel.disabled = picked === 0;
+  bulkDel.textContent = picked ? `删除所选（${picked}）` : "删除所选";
+  pickAll.checked = shown > 0 && picked === shown;
+  pickAll.indeterminate = picked > 0 && picked < shown;
+  pickAllText.textContent = shown ? `全选当前筛选（${shown}）` : "全选";
+}
+
+// 二次确认做成按钮自身状态：一次点错不会真的删掉东西，4 秒后自动复位
+const ARM_TIMEOUT = 4000;
+
+function confirmThen(btn, action) {
+  if (btn.dataset.armed === "1") {
+    clearTimeout(Number(btn.dataset.timer));
+    btn.dataset.armed = "";
+    btn.classList.remove("armed");
+    btn.textContent = btn.dataset.label || "删除";
+    action();
+    return;
+  }
+  btn.dataset.label = btn.textContent;
+  btn.dataset.armed = "1";
+  btn.classList.add("armed");
+  btn.textContent = "确认删除？";
+  btn.dataset.timer = String(setTimeout(() => {
+    if (btn.dataset.armed !== "1") return;
+    btn.dataset.armed = "";
+    btn.classList.remove("armed");
+    btn.textContent = btn.dataset.label || "删除";
+  }, ARM_TIMEOUT));
+}
+
+function disarmBulk() {
+  clearTimeout(Number(bulkDel.dataset.timer));
+  bulkDel.dataset.armed = "";
+  bulkDel.classList.remove("armed");
+  bulkDel.textContent = history.selected.size ? `删除所选（${history.selected.size}）` : "删除所选";
+}
+
+async function deleteJobs(ids) {
+  if (!ids.length) return;
+  bulkDel.disabled = true;
+  try {
+    const res = await api("/api/jobs/prune", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids }),
+    });
+    const removed = res.removed || [];
+    const blocked = res.blocked || [];
+    for (const id of removed) {
+      history.selected.delete(id);
+      if (viewedJobId === id) {
+        stopPolling();
+        currentJob = null;
+        viewedJobId = null;
+        reportEl.innerHTML = "";
+        statusBox.hidden = true;
+      }
+    }
+    historyMsg(
+      blocked.length
+        ? `已删除 ${removed.length} 个；${blocked.length} 个还在跑，先不动它们`
+        : `已删除 ${removed.length} 个任务，目录在废纸篓`,
+      blocked.length ? "warn" : "",
+    );
+    await loadHistory();
+  } catch (err) {
+    historyMsg(`删除失败：${err.message}`, "warn");
+  } finally {
+    syncBulk();
+  }
+}
+
+pickAll.addEventListener("change", () => {
+  if (pickAll.checked) history.jobs.forEach((job) => history.selected.add(job.id));
+  else history.selected.clear();
+  historyList.querySelectorAll("input[type=checkbox]").forEach((box) => {
+    box.checked = history.selected.has(box.closest(".job").dataset.id);
+  });
+  disarmBulk();
+  syncBulk();
+});
+
+bulkDel.addEventListener("click", () => confirmThen(bulkDel, () => deleteJobs([...history.selected])));
+
+moreBtn.addEventListener("click", () => {
+  history.limit += 50;
+  loadHistory();
+});
+
 
 form.addEventListener("submit", (e) => {
   e.preventDefault();
@@ -337,6 +596,7 @@ const deepLink = new URLSearchParams(location.search).get("job");
 if (deepLink) {
   api(`/api/jobs/${deepLink}`)
     .then(async (job) => {
+      viewedJobId = job.id;
       renderStatus(job);
       if (job.status === "done") await showReport(job);
     })

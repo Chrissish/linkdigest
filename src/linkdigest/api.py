@@ -55,6 +55,13 @@ DOWNLOADS = {
     "answer.template.json",
 }
 HANDOFF_FILES = {"BRIEF.md", "transcript.md", "answer.template.json"}
+# 列表筛选：键是 URL 上的 status 值，值是库里的状态集合（None 表示不筛）
+STATUS_FILTERS: dict[str, tuple[str, ...] | None] = {
+    "all": None,
+    "active": ("queued", "running"),
+    "done": ("done",),
+    "failed": ("failed",),
+}
 FRONTMATTER = re.compile(r"\A---[ \t]*\n.*?\n---[ \t]*(?:\n|\Z)", re.S)
 
 
@@ -66,6 +73,10 @@ class CreateJob(BaseModel):
 
 class AnswerPayload(BaseModel):
     answer: dict | None = None
+
+
+class PruneJobs(BaseModel):
+    ids: list[str]
 
 
 def _store_for(overrides: dict[str, str] | None) -> Store:
@@ -181,8 +192,43 @@ async def upload(file: UploadFile) -> dict:
 
 
 @app.get("/api/jobs")
-def list_jobs(limit: int = 30) -> list[dict]:
-    return [job_view(store, job) for job in store.list(limit)]
+def list_jobs(limit: int = 50, offset: int = 0, status: str = "all") -> dict:
+    """任务列表。status 支持 all / active / done / failed，附带各状态计数给筛选条用。"""
+    if status not in STATUS_FILTERS:
+        raise HTTPException(400, f"未知状态筛选：{status}（可选：{' / '.join(STATUS_FILTERS)}）")
+    limit = max(1, min(limit, 500))
+    jobs = store.list(limit, max(0, offset), STATUS_FILTERS[status])
+    return {
+        "jobs": [job_view(store, job) for job in jobs],
+        "counts": store.counts(),
+        "status": status,
+        "limit": limit,
+        "offset": max(0, offset),
+    }
+
+
+@app.delete("/api/jobs/{job_id}")
+def delete_job(job_id: str) -> dict:
+    """删单个任务：记录移除，目录移入废纸篓。"""
+    removed, blocked = service.prune_exact(store, [job_id])
+    if blocked:
+        raise HTTPException(409, "任务还在跑，等它结束或失败后再删")
+    if not removed:
+        raise HTTPException(404, "job 不存在")
+    job, moved = removed[0]
+    return {"ok": True, "removed": [job.id], "blocked": [], "trashed": str(moved) if moved else None}
+
+
+@app.post("/api/jobs/prune")
+def prune_jobs(payload: PruneJobs) -> dict:
+    """批量删：一次调用搬多个目录，失败的单个任务不影响其余。"""
+    removed, blocked = service.prune_exact(store, payload.ids)
+    return {
+        "ok": True,
+        "removed": [job.id for job, _ in removed],
+        "blocked": [job_view(store, job) for job in blocked],
+        "counts": store.counts(),
+    }
 
 
 @app.get("/api/jobs/{job_id}")
@@ -277,7 +323,14 @@ def download(job_id: str, name: str) -> FileResponse:
 
 @app.get("/", response_class=HTMLResponse)
 def index() -> str:
-    return resource_text("web/index.html")
+    html = resource_text("web/index.html")
+    # 内联样式：聊天内置预览这类容器会拦外部 CSS（<link> 不发请求、脚本却放行），
+    # 内联后任何环境都能正确渲染。style.css 仍是唯一样式源，这里只是注入。
+    css = resource_text("web/static/style.css")
+    return html.replace(
+        '<link rel="stylesheet" href="static/style.css">',
+        f"<style>\n{css}\n</style>",
+    )
 
 
 def _run(job_store: Store, job_id: str) -> None:

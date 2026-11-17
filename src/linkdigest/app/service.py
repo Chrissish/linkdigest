@@ -19,6 +19,7 @@ from ..handoff import ANSWER, BRIEF, apply_answer, read_answer
 from ..ingest.normalize import normalize_input
 from ..jobs.artifacts import artifacts_present, load_artifacts
 from ..jobs.db import Store
+from ..jobs.index import refresh_index
 from ..jobs.models import Job
 from ..jobs.stages import read_stages
 from ..jobs.view import job_view
@@ -103,6 +104,9 @@ def failed_jobs(store: Store, limit: int = 500) -> list[Job]:
     return [job for job in store.list(limit) if job.status == "failed"]
 
 
+ACTIVE_STATUSES = frozenset({"queued", "running"})
+
+
 def prune(store: Store, tokens: list[str]) -> list[tuple[Job, Path | None]]:
     """删任务：记录移除，目录整体移进废纸篓（外置盘上不做真删除）。"""
     removed: list[tuple[Job, Path | None]] = []
@@ -112,11 +116,41 @@ def prune(store: Store, tokens: list[str]) -> list[tuple[Job, Path | None]]:
         if job is None or job.id in seen:
             continue
         seen.add(job.id)
-        directory = store.job_dir(job.id)
-        moved = _trash(directory) if directory.exists() else None
-        store.delete(job.id)
+        moved = _discard(store, job)
         removed.append((job, moved))
+    if removed:
+        refresh_index(store, store.list(300))
     return removed
+
+
+def prune_exact(store: Store, ids: list[str]) -> tuple[list[tuple[Job, Path | None]], list[Job]]:
+    """网页端的删除：只认精确 id，返回 (已删, 拒删)。
+
+    还在排队/跑的任务不动——目录被搬走之后，管道会继续往一个已被搬走的位置写，
+    最后留下既没记录也没产物的残骸。让它在跑完或失败之后再删。
+    """
+    removed: list[tuple[Job, Path | None]] = []
+    blocked: list[Job] = []
+    seen: set[str] = set()
+    for job_id in ids:
+        job = store.get(job_id)
+        if job is None or job.id in seen:
+            continue
+        seen.add(job.id)
+        if job.status in ACTIVE_STATUSES:
+            blocked.append(job)
+            continue
+        removed.append((job, _discard(store, job)))
+    if removed:
+        refresh_index(store, store.list(300))
+    return removed, blocked
+
+
+def _discard(store: Store, job: Job) -> Path | None:
+    directory = store.job_dir(job.id)
+    moved = _trash(directory) if directory.exists() else None
+    store.delete(job.id)
+    return moved
 
 
 def _trash(path: Path) -> Path:

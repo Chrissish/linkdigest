@@ -11,7 +11,7 @@ import threading
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Sequence
 
 from ..config import Settings
 from .layout import job_dir, job_dir_name, job_path
@@ -97,10 +97,31 @@ class Store:
             row = conn.execute("SELECT * FROM jobs WHERE id = ?", (job_id,)).fetchone()
         return Job.from_row(row) if row else None
 
-    def list(self, limit: int = 30) -> list[Job]:
+    def list(
+        self, limit: int = 30, offset: int = 0, statuses: Sequence[str] | None = None
+    ) -> list[Job]:
+        """按创建时间倒序取一页。statuses 为空表示不筛。"""
+        sql = "SELECT * FROM jobs"
+        params: list[Any] = []
+        if statuses:
+            sql += f" WHERE status IN ({', '.join('?' * len(statuses))})"
+            params.extend(statuses)
+        sql += " ORDER BY created_at DESC LIMIT ? OFFSET ?"
+        params.extend([limit, offset])
         with self._conn() as conn:
-            rows = conn.execute("SELECT * FROM jobs ORDER BY created_at DESC LIMIT ?", (limit,)).fetchall()
+            rows = conn.execute(sql, params).fetchall()
         return [Job.from_row(r) for r in rows]
+
+    def counts(self) -> dict[str, int]:
+        """各状态的任务数，给前端筛选条上的角标用。"""
+        counts = {"all": 0, "queued": 0, "running": 0, "done": 0, "failed": 0}
+        with self._conn() as conn:
+            rows = conn.execute("SELECT status, COUNT(*) AS n FROM jobs GROUP BY status").fetchall()
+        for row in rows:
+            counts["all"] += row["n"]
+            counts[row["status"]] = row["n"]
+        counts["active"] = counts["queued"] + counts["running"]
+        return counts
 
     def delete(self, job_id: str) -> None:
         """从状态库里移除记录（产物目录由调用方处理）。"""

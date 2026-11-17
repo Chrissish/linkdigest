@@ -11,9 +11,16 @@
   报告与配置快照仍记仓库名，不把随机器变的绝对路径写进产物。查找顺序：
   `ASR_MODEL` 本身是目录 → `ASR_MODEL_DIR/<仓库名末段>` → `ASR_MODEL_DIR/<ASR_MODEL>`
   → HF 缓存。只查不下载。
+- 网页端历史任务改成列表：状态筛选（全部 / 进行中 / 完成 / 失败，带计数）、
+  全选当前筛选、多选后批量删除，删除要二次确认。
+- `DELETE /api/jobs/{id}` 与 `POST /api/jobs/prune`：按精确 id 删，目录进废纸篓。
 
 ### 变更
 
+- `GET /api/jobs` 返回 `{jobs, counts, status, limit, offset}`（原先为裸数组），
+  支持 `status` 筛选与 `offset` 分页，`limit` 上限 500。
+- 还在排队/运行的任务拒删（409）：目录被搬走后管道会继续往旧位置写，只留残骸。
+- 删任务后重建 `INDEX.md`，CLI `--prune` 与网页删除同一口径。
 - Apple Silicon 上 `ASR_ENGINE=auto` 默认走 mlx-whisper（Metal）。判定链是
   「架构 → 本地模型文件 → 真加载一次」，任一不过回落 faster-whisper，原因写进报告的
   质量说明。显式指定引擎时不降级，失败直接报错并指路 `auto`。程序内不下载模型。
@@ -22,6 +29,9 @@
 
 ### 修复
 
+- 首页样式改由服务端内联注入：聊天内置预览这类容器会丢弃 `<link rel="stylesheet">`
+  却不拦脚本，页面呈现裸 HTML。`style.css` 仍是唯一样式源。
+- 历史任务的时间显示的是 UTC（`slice(11,16)` 直接截 ISO 串），按本地时区格式化。
 - 状态页 ASR 徽章把**装了的引擎**并排显示成「faster-whisper / mlx-whisper」，
   读起来像两个引擎同时在跑。改为报这一进程实际会用的那个（`preview_engine`：架构 +
   本地模型文件，不加载权重），装了哪些降为悬停提示；启动横幅同一口径。
