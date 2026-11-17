@@ -55,6 +55,9 @@ class Settings(BaseModel):
     # 转写
     asr_engine: str = "auto"
     asr_model: str = "small"
+    # 本地模型根目录：模型体积大，放在数据盘/外置盘比放项目里合理。
+    # 只用来「查」，程序不会往里下载任何东西。
+    asr_model_dir: Path | None = None
     asr_compute_type: str = "int8"
     asr_device: str = "auto"
     asr_max_seconds: int = Field(default=4 * 3600, ge=60)
@@ -186,6 +189,11 @@ def _cookies_file() -> Path | None:
     return resolve_path(raw, ENV_ANCHOR) if raw else None
 
 
+def _asr_model_dir() -> Path | None:
+    raw = env("ASR_MODEL_DIR")
+    return resolve_path(raw, ENV_ANCHOR) if raw else None
+
+
 def _api_key() -> SecretStr | None:
     raw = env("LLM_API_KEY")
     return SecretStr(raw) if raw else None
@@ -200,6 +208,7 @@ def load() -> Settings:
             js_runtime=find_js_runtime(),
             asr_engine=(env("ASR_ENGINE", "auto") or "auto").lower(),
             asr_model=env("ASR_MODEL", "small") or "small",
+            asr_model_dir=_asr_model_dir(),
             asr_compute_type=env("ASR_COMPUTE_TYPE", "int8") or "int8",
             asr_device=env("ASR_DEVICE", "auto") or "auto",
             asr_max_seconds=env_int("ASR_MAX_SECONDS", 4 * 3600),

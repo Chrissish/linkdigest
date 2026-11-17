@@ -56,6 +56,7 @@ def _optional(raw: str) -> str | None:
 _FIELDS: dict[str, tuple[str, Callable[[str], Any]]] = {
     "asr.engine": ("asr_engine", _text),
     "asr.model": ("asr_model", _text),
+    "asr.model_dir": ("asr_model_dir", _path),
     "asr.compute_type": ("asr_compute_type", _text),
     "asr.device": ("asr_device", _text),
     "asr.max_seconds": ("asr_max_seconds", _int),
@@ -74,6 +75,7 @@ _FIELDS: dict[str, tuple[str, Callable[[str], Any]]] = {
 _ENV_ALIASES = {
     "ASR_ENGINE": "asr.engine",
     "ASR_MODEL": "asr.model",
+    "ASR_MODEL_DIR": "asr.model_dir",
     "ASR_COMPUTE_TYPE": "asr.compute_type",
     "ASR_DEVICE": "asr.device",
     "ASR_MAX_SECONDS": "asr.max_seconds",

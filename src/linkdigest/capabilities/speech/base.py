@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Protocol
@@ -13,6 +14,17 @@ class ASRSegment:
     end: float
     text: str
     confidence: float | None = None
+
+
+def avg_logprob_to_conf(value: float | None) -> float | None:
+    """把 avg_logprob（平均对数概率）换成 0-1 的近似置信度。
+
+    两个引擎都在 segment 上给这个值，换算方式必须一致，否则换引擎后
+    `quality.avg_confidence` 和低置信度告警的阈值就不再可比。缺失返回 None。
+    """
+    if value is None:
+        return None
+    return round(min(1.0, math.exp(value)), 3)
 
 
 @dataclass(slots=True)

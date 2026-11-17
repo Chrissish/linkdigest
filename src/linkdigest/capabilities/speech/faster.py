@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-import math
 from pathlib import Path
 from typing import Any
 
 from ...config import Settings
-from .base import ASRResult, ASRSegment
+from .base import ASRResult, ASRSegment, avg_logprob_to_conf
 from .pcm import load_pcm
 
 _MODEL_CACHE: dict[str, Any] = {}
@@ -45,12 +44,6 @@ def _load_model(cfg: Settings):
     return _MODEL_CACHE[key]
 
 
-def _avg_logprob_to_conf(value: float | None) -> float | None:
-    if value is None:
-        return None
-    return round(min(1.0, math.exp(value)), 3)
-
-
 class FasterWhisperEngine:
     name = "faster-whisper"
 
@@ -77,7 +70,7 @@ class FasterWhisperEngine:
                 start=float(seg.start),
                 end=float(seg.end),
                 text=seg.text.strip(),
-                confidence=_avg_logprob_to_conf(getattr(seg, "avg_logprob", None)),
+                confidence=avg_logprob_to_conf(getattr(seg, "avg_logprob", None)),
             )
             for seg in iterator
         ]

@@ -5,6 +5,29 @@
 
 ## [Unreleased]
 
+### 新增
+
+- `ASR_MODEL_DIR`：本地模型根目录。`ASR_MODEL` 只写模型名，靠它定位到具体目录，
+  报告与配置快照仍记仓库名，不把随机器变的绝对路径写进产物。查找顺序：
+  `ASR_MODEL` 本身是目录 → `ASR_MODEL_DIR/<仓库名末段>` → `ASR_MODEL_DIR/<ASR_MODEL>`
+  → HF 缓存。只查不下载。
+
+### 变更
+
+- Apple Silicon 上 `ASR_ENGINE=auto` 默认走 mlx-whisper（Metal）。判定链是
+  「架构 → 本地模型文件 → 真加载一次」，任一不过回落 faster-whisper，原因写进报告的
+  质量说明。显式指定引擎时不降级，失败直接报错并指路 `auto`。程序内不下载模型。
+- `avg_logprob_to_conf` 上移到 `speech/base.py` 由两个引擎共用：换引擎后平均置信度、
+  以及「平均置信度偏低」告警的阈值保持可比。
+
+### 修复
+
+- mlx 适配器漏读 `avg_logprob`，导致 `confidence` 恒为 None——报告置信度显示 n/a，
+  低置信度告警永不触发。现在与 faster-whisper 同一套换算。
+- mlx 适配器直接收 16k float32 PCM，不再让上游对同一段音频重复起一次 ffmpeg。
+- mlx 的 `language_probability` 改记 0.0（未知），不再谎报 1.00；交接单在概率未知时只报语言。
+- mlx 的 `duration` 用末段结束时间补齐，入参传 0 时不再返回 0。
+
 ### 计划中
 
 - 任务队列持久化：进程重启后能续跑未完成的任务

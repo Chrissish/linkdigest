@@ -468,6 +468,143 @@ check("spotify 判为音频", classify("https://open.spotify.com/episode/abc"), 
 check("未知域名按文章", classify("https://example.com/post"), "article")
 check("短链认得平台", detect_platform("https://b23.tv/xyz"), "bilibili")
 
+print("[asr 适配器]")
+# 本机通常只装了一个引擎，所以桩掉上游模块，只验适配契约：吃 PCM、算置信度、不编造概率。
+import types  # noqa: E402
+import wave  # noqa: E402
+
+from linkdigest.capabilities.speech.mlx import MlxWhisperEngine  # noqa: E402
+
+_seen: dict = {}
+
+
+def _stub_transcribe(audio, **kwargs):
+    _seen["audio"] = audio
+    _seen["kwargs"] = kwargs
+    return {
+        "language": "zh",
+        "segments": [
+            {"start": 0.0, "end": 2.0, "text": " 甲 ", "avg_logprob": -0.5},
+            {"start": 2.0, "end": 4.0, "text": "乙", "avg_logprob": -1.0},
+            {"start": 4.0, "end": 5.0, "text": "丙", "avg_logprob": None},
+        ],
+    }
+
+
+_probe_module = types.ModuleType("mlx_whisper")
+_probe_module.transcribe = _stub_transcribe
+sys.modules["mlx_whisper"] = _probe_module
+_probe_wav = Path(tempfile.mkdtemp()) / "probe.wav"
+with wave.open(str(_probe_wav), "wb") as _fh:
+    _fh.setnchannels(1)
+    _fh.setsampwidth(2)
+    _fh.setframerate(16000)
+    _fh.writeframes(b"\x00\x00" * 16000)  # 1 秒静音
+
+_mlx_dir = Path(tempfile.mkdtemp())
+(_mlx_dir / "config.json").write_text("{}", encoding="utf-8")
+(_mlx_dir / "weights.safetensors").write_bytes(b"")  # 只为过存在性检查，不真加载
+_mlx = MlxWhisperEngine(cfg.model_copy(update={"asr_model": str(_mlx_dir)}))
+_out = _mlx.transcribe(_probe_wav, "zh", 0.0)
+
+check("mlx 模型名映射到 HF 仓库", MlxWhisperEngine(
+    cfg.model_copy(update={"asr_model": "large-v3-turbo"})
+).repo, "mlx-community/whisper-large-v3-turbo")
+check("mlx engine_id", MlxWhisperEngine(
+    cfg.model_copy(update={"asr_model": "large-v3-turbo"})
+).engine_id, "mlx-whisper:mlx-community/whisper-large-v3-turbo")
+check_true("mlx 收到 PCM 而不是路径", not isinstance(_seen["audio"], (str, Path)))
+check("mlx 只传本地路径给上游（不触发下载）", _seen["kwargs"]["path_or_hf_repo"], str(_mlx_dir))
+check("ASR_MODEL 写目录时 identity 用目录名", _mlx.engine_id, f"mlx-whisper:{_mlx_dir.name}")
+check_true("mlx 不向 mlx_whisper 透传 device/compute_type", "device" not in _seen["kwargs"])
+check("mlx 置信度换算与 faster 同源", _out.segments[0].confidence, 0.607)
+check("mlx 缺 avg_logprob 记 None", _out.segments[2].confidence, None)
+check("mlx 段文本去空白", _out.segments[0].text, "甲")
+check("mlx 不编造语言概率", _out.language_probability, 0.0)
+check("mlx duration 用末段补齐", _out.duration, 5.0)
+_probe_module.transcribe = lambda audio, **kw: {"language": None, "segments": []}
+_empty = _mlx.transcribe(_probe_wav, None, 9.0)
+check("mlx 空结果 language 回落", _empty.language, "unknown")
+check("mlx 空结果 duration 回落到入参", _empty.duration, 9.0)
+del sys.modules["mlx_whisper"]
+
+print("[asr 选引擎]")
+import importlib.util  # noqa: E402
+
+import linkdigest.capabilities.speech as _speech  # noqa: E402
+
+_orig = (_speech.mlx_supported, _speech.available_engines, _speech._mlx_probe)
+
+_speech.mlx_supported = lambda: True
+_speech.available_engines = lambda: ["faster-whisper", "mlx-whisper"]
+check("Apple Silicon 上 mlx 排第一", _speech._ordered_engines()[0], "mlx-whisper")
+check("auto 解析到 mlx", _speech.resolve_engine(cfg), "mlx-whisper")
+
+_speech.mlx_supported = lambda: False
+check("非 Apple Silicon 保持登记顺序", _speech._ordered_engines()[0], "faster-whisper")
+
+_speech.mlx_supported = lambda: True
+_probe_dir = Path(tempfile.mkdtemp())
+(_probe_dir / "config.json").write_text("{}", encoding="utf-8")
+check_true(
+    "只有 config.json 不算模型目录",
+    MlxWhisperEngine(cfg.model_copy(update={"asr_model": str(_probe_dir)})).model_path is None,
+)
+(_probe_dir / "weights.safetensors").write_bytes(b"")
+check(
+    "配置路径命中本地模型",
+    MlxWhisperEngine(cfg.model_copy(update={"asr_model": str(_probe_dir)})).model_path,
+    _probe_dir,
+)
+
+# 模型集中放外置盘：ASR_MODEL 只写名字，靠 ASR_MODEL_DIR 定位
+_model_root = Path(tempfile.mkdtemp())
+for _sub in ("whisper-large-v3-turbo", "small"):
+    (_model_root / _sub).mkdir()
+    (_model_root / _sub / "config.json").write_text("{}", encoding="utf-8")
+    (_model_root / _sub / "weights.safetensors").write_bytes(b"")
+_dir_cfg = cfg.model_copy(update={"asr_model": "large-v3-turbo", "asr_model_dir": _model_root})
+check("ASR_MODEL_DIR 按仓库名定位模型", MlxWhisperEngine(_dir_cfg).model_path,
+      _model_root / "whisper-large-v3-turbo")
+check("走 ASR_MODEL_DIR 时 engine_id 仍记仓库名", MlxWhisperEngine(_dir_cfg).engine_id,
+      "mlx-whisper:mlx-community/whisper-large-v3-turbo")
+check("ASR_MODEL_DIR 也认配置名当子目录", MlxWhisperEngine(
+    cfg.model_copy(update={"asr_model": "small", "asr_model_dir": _model_root})
+).model_path, _model_root / "small")
+
+_probe_missing, _probe_reason = _speech._mlx_probe(
+    cfg.model_copy(update={"asr_model": str(tempfile.mkdtemp())})
+)
+check("本地没权重 → 探针判不可用", _probe_missing, None)
+check_true("原因写清不代下模型", "不代下" in _probe_reason, _probe_reason)
+
+_speech._mlx_probe = lambda c: (None, "本地没有权重")
+if importlib.util.find_spec("faster_whisper"):
+    _fallback, _note = _speech.select_engine(cfg)
+    check("auto 探针失败回落到 faster", type(_fallback).__name__, "FasterWhisperEngine")
+    check_true("回落原因可读", "已回落到 faster-whisper" in _note, _note)
+
+try:
+    _speech.select_engine(cfg.model_copy(update={"asr_engine": "mlx-whisper"}))
+    check("显式 mlx 不可用应报错", "没抛", "抛错")
+except RuntimeError as _exc:
+    check_true("显式 mlx 报错并指路 auto", "改成 auto" in str(_exc), str(_exc))
+
+
+class _FakeMlx:
+    name = "mlx-whisper"
+
+    def transcribe(self, *a, **kw):
+        raise AssertionError("不该走到真转写")
+
+
+_speech._mlx_probe = lambda c: (_FakeMlx(), "")
+_selected, _note = _speech.select_engine(cfg)
+check("探针通过就用 mlx", _selected.name, "mlx-whisper")
+check("首选跑不写降级说明", _note, "")
+
+_speech.mlx_supported, _speech.available_engines, _speech._mlx_probe = _orig
+
 if FAILED:
     print(f"失败 {len(FAILED)} 项：")
     for item in FAILED:

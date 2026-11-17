@@ -112,6 +112,9 @@ def run_job(store: Store, job_id: str) -> None:
                 store.update(job_id, progress=0.58)
             with Stage(store, job_id, "normalize"):
                 cleaned = normalize_segments(cfg, asr.segments)
+            # 引擎降级不是错误，但必须让人看见：这条会进 bundle.quality.warnings，报告里能查到
+            if asr.raw.get("engine_note"):
+                cleaned.warnings.append(str(asr.raw["engine_note"]))
             media = MediaMeta(
                 audio_path=f"jobs/{final_dir}/audio.wav",
                 audio_sha256=sha256_file(wav),

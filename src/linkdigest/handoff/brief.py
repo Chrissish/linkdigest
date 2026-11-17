@@ -28,7 +28,17 @@ def meta_table(bundle: TranscriptBundle, job_id: str, directory: Path) -> str:
         ("发布", src.published_at or "未知"),
         ("源链接", src.canonical_url or src.url or "（本地文件）"),
         ("时长 / 篇幅", ts(duration) if duration else f"{bundle.quality.chars} 字"),
-        ("原文语言", f"{bundle.language.detected}（置信度 {bundle.language.probability:.2f}）"),
+        (
+            "原文语言",
+            # mlx-whisper 不返回语言检测概率，此时记 0.0；写成「置信度 0.00」会被误读成
+            # 「检测得很不准」，所以这种情况只报语言、不报概率。
+            f"{bundle.language.detected}"
+            + (
+                f"（置信度 {bundle.language.probability:.2f}）"
+                if bundle.language.probability > 0
+                else ""
+            ),
+        ),
         ("转写引擎", bundle.quality.asr_engine),
         (
             "质量",
