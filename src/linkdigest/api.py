@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import re
 import shutil
 import uuid
@@ -136,6 +137,19 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title="LinkDigest", version=cfg.pipeline_version, lifespan=lifespan)
+
+
+@app.middleware("http")
+async def static_revalidate(request, call_next):
+    """静态资源强制协商缓存：每次都带 ETag 回源验证，304 时几乎零开销。
+
+    StaticFiles 默认只发 ETag/Last-Modified 不发 Cache-Control，浏览器按启发式
+    缓存直接用旧文件，前端改动会「刷新也没变化」。
+    """
+    response = await call_next(request)
+    if request.url.path == "/" or request.url.path.startswith("/static"):
+        response.headers["Cache-Control"] = "no-cache"
+    return response
 store = Store(cfg)
 pool = ThreadPoolExecutor(max_workers=cfg.job_workers, thread_name_prefix="job")
 
@@ -364,9 +378,15 @@ def index() -> str:
     # 内联样式：聊天内置预览这类容器会拦外部 CSS（<link> 不发请求、脚本却放行），
     # 内联后任何环境都能正确渲染。style.css 仍是唯一样式源，这里只是注入。
     css = resource_text("web/static/style.css")
-    return html.replace(
+    html = html.replace(
         '<link rel="stylesheet" href="static/style.css">',
         f"<style>\n{css}\n</style>",
+    )
+    # 脚本带内容哈希版本号：app.js 变更后 URL 随之变化，浏览器缓存自然失效
+    js_hash = hashlib.sha1(resource_text("web/static/app.js").encode()).hexdigest()[:10]
+    return html.replace(
+        '<script src="static/app.js">',
+        f'<script src="static/app.js?v={js_hash}">',
     )
 
 

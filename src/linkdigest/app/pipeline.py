@@ -233,10 +233,10 @@ def run_job(store: Store, job_id: str) -> None:
                 },
             )
 
-        if report.degraded:
-            # 没有模型密钥时，把「理解」这一步交出去：导出可被外部 agent 直接消化的交接包
-            with Stage(store, job_id, "handoff"):
-                export_handoff(store, job_id, bundle)
+        # 交接包无条件导出：降级任务拿它走外部 agent 理解，LLM 任务也是下游
+        # 二次加工（重跑理解、handoff 链路）的入口。只落盘，不花模型钱。
+        with Stage(store, job_id, "handoff"):
+            export_handoff(store, job_id, bundle)
         store.update(job_id, status="done", stage="done", progress=1.0)
     except Exception as exc:
         detail = str(exc) if isinstance(exc, DownloadFailure) else f"{type(exc).__name__}: {exc}"
@@ -310,6 +310,8 @@ def rerun_understand(store: Store, job_id: str) -> None:
                 except (json.JSONDecodeError, KeyError):
                     pass
             write_json(store.job_path(job_id, "usage.json"), usage)
+        with Stage(store, job_id, "handoff"):
+            export_handoff(store, job_id, bundle)
         store.update(job_id, status="done", stage="done", progress=1.0, error=None)
     except Exception as exc:
         # 不推翻已完成的任务状态，但要让前端和阶段日志都看得见这次失败

@@ -271,11 +271,35 @@ function ensurePolling() {
   pollAll();
 }
 
+function reportFrame(job) {
+  // 中栏直接内嵌独立报告页：一份渲染器，两处展示（含移动端）永远一致。
+  // 时间码跳转、速览卡、引用块这些结构化能力只在 /html 端点有，md 转的片段全丢。
+  // ?v= 带更新时间：重跑理解后浏览器不会拿旧报告。
+  const frame = document.createElement("iframe");
+  frame.className = "report-frame";
+  frame.src = `/api/jobs/${job.id}/html?v=${encodeURIComponent(job.updated_at || job.id)}`;
+  frame.title = job.title || "报告";
+  frame.addEventListener("load", () => {
+    try {
+      const doc = frame.contentDocument;
+      if (!doc || !doc.documentElement) return;
+      const fit = () => {
+        frame.style.height = `${doc.documentElement.scrollHeight}px`;
+      };
+      fit();
+      new ResizeObserver(fit).observe(doc.documentElement);
+    } catch {
+      // 理论上同源不会走到这；真走了就让 CSS 的 min-height 兜底
+    }
+  });
+  return frame;
+}
+
 async function showReport(job) {
-  const html = await api(`/api/jobs/${job.id}/report`);
   emptyBox.hidden = true;
-  reportEl.innerHTML = html;
-  if (job.degraded) reportEl.prepend(handoffBanner(job));
+  reportEl.innerHTML = "";
+  if (job.degraded) reportEl.appendChild(handoffBanner(job));
+  reportEl.appendChild(reportFrame(job));
   const actions = document.createElement("div");
   actions.className = "actions";
   actions.innerHTML = `

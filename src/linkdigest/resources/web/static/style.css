@@ -401,6 +401,14 @@ button#go:disabled { opacity: 0.5; cursor: default; }
 
 .report { margin-top: 34px; }
 .report:empty { display: none; }
+.report-frame {
+  display: block;
+  width: 100%;
+  min-height: 320px;
+  border: 0;
+  padding: 0;
+  background: transparent;
+}
 
 .report h1 { font-size: 24px; line-height: 1.35; font-weight: 500; margin: 0 0 6px; letter-spacing: -0.01em; }
 .report h2 { font-size: 15px; font-weight: 500; margin: 34px 0 12px; padding-bottom: 8px; border-bottom: 1px solid var(--line); color: var(--text); }

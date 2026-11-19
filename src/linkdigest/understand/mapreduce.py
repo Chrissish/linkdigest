@@ -58,7 +58,7 @@ def build_report(
         chapters=chapters_block(bundle),
     )
     try:
-        payload = client.chat_json(prompts.reduce_system(bundle), user, max_tokens=6000)
+        payload = _reduce_payload(client, bundle, user)
     except LLMError as exc:
         client.stats.errors.append(f"reduce: {exc}")
         report = degraded_report(bundle)
@@ -68,6 +68,38 @@ def build_report(
     report = report_from_payload(payload)
     report.notes.append(f"分块 {len(chunks)} 段，模型 {cfg.llm_model}")
     return report, ReportRun("llm", len(chunks))
+
+
+def _optional_layer_empty(report: Report) -> bool:
+    """可选层是不是全空。单空正常（素材真的没有），全空基本是漏。"""
+    return not (
+        report.tldr or report.data_points or report.quotes or report.terms or report.controversies
+    )
+
+
+def _reduce_payload(client: JsonChat, bundle: TranscriptBundle, user: str) -> dict:
+    """reduce 调用 + 可选层兜底。
+
+    spec 给了省略许可（「拿不准就删」），模型偶尔把可选层整层留空而正文写得
+    很满——这属于漏，不是简。正文可观而可选层全空时，把自检要求说透再问一次。
+    """
+    payload = client.chat_json(prompts.reduce_system(bundle), user, max_tokens=6000)
+    first = report_from_payload(payload)
+    if len(first.body) < 600 or not _optional_layer_empty(first):
+        return payload
+    nudge = (
+        user
+        + "\n\n补充要求：上一稿的可选层（tldr / data_points / quotes / terms / controversies）"
+        "全部留空，但正文篇幅可观——对照正文重新自检：结论性数字进 data_points、"
+        "值得原样保留的话进 quotes、外文术语进 terms、主要结论进 tldr、"
+        "矛盾与未证实的说法进 controversies。正文里确有素材的字段不许空。"
+        "重新输出完整 JSON。"
+    )
+    try:
+        return client.chat_json(prompts.reduce_system(bundle), nudge, max_tokens=6000)
+    except LLMError as exc:
+        client.stats.errors.append(f"reduce 兜底重问: {exc}")
+        return payload
 
 
 def _map_chunk(client: JsonChat, chunk: Chunk, lang: str) -> dict:
