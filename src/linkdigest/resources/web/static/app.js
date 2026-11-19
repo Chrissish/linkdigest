@@ -283,11 +283,14 @@ function reportFrame(job) {
     try {
       const doc = frame.contentDocument;
       if (!doc || !doc.documentElement) return;
+      // 量内容容器而不是 documentElement：后者高度等于视口，iframe 一变高它跟着
+      // 变高，再触发 fit 就成了无限下拉。main.sheet 的高度只由内容决定。
+      const sheet = doc.querySelector("main") || doc.body;
       const fit = () => {
-        frame.style.height = `${doc.documentElement.scrollHeight}px`;
+        frame.style.height = `${Math.ceil(sheet.getBoundingClientRect().height)}px`;
       };
       fit();
-      new ResizeObserver(fit).observe(doc.documentElement);
+      new ResizeObserver(fit).observe(sheet);
     } catch {
       // 理论上同源不会走到这；真走了就让 CSS 的 min-height 兜底
     }

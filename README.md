@@ -176,6 +176,7 @@ pip install -e ".[mlx]"      # Apple Silicon 加速
 可替换的理解。所以换模型、换 agent、甚至不接模型，前半段的结论都成立。
 
 - 分层与各层职责：[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+- 理解层技术流（直读 / map-reduce / handoff 三条路径）：[docs/UNDERSTANDING.md](docs/UNDERSTANDING.md)
 - 取舍细节与待办：[docs/DETAILED-DESIGN.md](docs/DETAILED-DESIGN.md)
 - 契约定义：[schemas/transcript_bundle.schema.json](schemas/transcript_bundle.schema.json)
 

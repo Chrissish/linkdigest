@@ -39,3 +39,15 @@ def reduce_system(bundle: TranscriptBundle) -> str:
 
 def reduce_user() -> str:
     return _load("reduce.user")
+
+
+def direct_user() -> str:
+    return _load("direct.user")
+
+
+def controversies_system() -> str:
+    return "你是内容校对员，只从给定正文里抽取争议与未证实之处，输出严格 JSON。"
+
+
+def controversies_user(body: str) -> str:
+    return _load("controversies.user") + "\n\n正文：\n\n" + body

@@ -48,6 +48,16 @@ def chunk_bundle(
     return chunks
 
 
+def full_text(bundle: TranscriptBundle) -> str:
+    """全文带锚点，不分块——单次直读路径用。锚点口径与 chunk_bundle 一致。"""
+    timeline = bundle.has_timeline
+    lines = [
+        f"[{ts(seg.start)}] {seg.text}" if timeline else f"[段{int(seg.start) + 1}] {seg.text}"
+        for seg in bundle.segments
+    ]
+    return "\n".join(lines)
+
+
 def digest_block(index: int, chunk: Chunk, digest: dict) -> str:
     points = "；".join(str(p) for p in (digest.get("points") or [])[:8])
     return (

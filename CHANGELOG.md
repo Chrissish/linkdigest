@@ -3,6 +3,36 @@
 格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.5.0] - 2026-11-20
+
+### 新增
+
+- **单次直读路径**：上下文窗口够用时一次调用通读全文出完整报告，省 30-40% token
+  且正文更长（41 分钟播客实测 1 次调用 1.5 万+5 千 tokens、约 $0.005、35 秒）。
+  窗口按模型名家族表推断（deepseek 64K / claude 200K / gemini 1M，未知名回落 32K），
+  token 按语种构成加权估算（CJK 0.6/字、拉丁 0.29/字），超预算或调用失败自动退回
+  map-reduce。手填逃生口 `LLM_CONTEXT_TOKENS` / `LLM_CHARS_PER_TOKEN`。
+- 理解层技术流文档：[docs/UNDERSTANDING.md](docs/UNDERSTANDING.md)——三条执行路径、
+  直读判据、传输自愈、补漏守卫、提示词装配。ARCHITECTURE 分层图 / 数据流图补直读
+  分支，新增 ADR-13。
+- 争议层补抽：模型把「存疑与争议」整层留空而正文明确写出争议时，只把正文喂回去
+  做一次小抽取（≤1200 tokens），不重跑全文。口径只收「两方说法冲突」与「明确被指
+  未证实」，不收开放的不确定性（那是 open_questions 的事），上限 6 条。
+- 报告 frontmatter 与页脚带 `path`（direct / map-reduce），页脚区分「本轮」与
+  「累计」用量；`POST /api/jobs/{id}/understand` 重跑也记账。
+
+### 修复
+
+- 「补充」区渲染出 `{'标题': [...]}` 字面量：模型把 dict / list 塞进本该是 Markdown
+  的 appendix 字段，原来直接 `str()` 落盘。现在统一压成 `###` 标题 + 列表，
+  字符串化的 JSON / Python 字面量也会还原；与正文七成以上重复的附录判为「正文
+  重排」整体丢弃。
+- 直读输出预算写死 6000 tokens，长内容撞 `finish=length` 被截断后自动翻倍重试，
+  白烧一次调用。现在直读传 9000，reduce 保持 6000。
+- spec 收紧三条：正文写了「有争议 / 未证实 / 缺乏研究」就必须进 `controversies`；
+  转写给出的头衔不许照抄放大（ASR 把硬件负责人读成 CEO 会跟着写实）；
+  `appendix` 必须是 Markdown 文本，不要输出 JSON 结构。
+
 ## [0.4.1] - 2026-11-19
 
 ### 新增

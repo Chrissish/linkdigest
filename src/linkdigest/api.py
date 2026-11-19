@@ -20,7 +20,7 @@ from pathlib import Path
 
 import markdown as md
 from fastapi import FastAPI, HTTPException, UploadFile
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -351,25 +351,36 @@ def _rerun(job_store: Store, job_id: str) -> None:
 
 @app.get("/api/jobs/{job_id}/html", response_class=HTMLResponse)
 def get_report_document(job_id: str) -> HTMLResponse:
-    """单文件 HTML 报告：自带完整样式，可直接预览、另存、转发。"""
-    path = store.job_path(job_id, "report.html")
-    if not path.exists():
-        path = service.rebuild_html(store, job_id)
-    if path is None or not path.exists():
+    """单文件 HTML 报告：自带完整样式，可直接预览、另存、转发。
+
+    每次现渲染，不读任务目录里的 report.html——那份是跑完时按当时模板写的，
+    版式与口径更新后老任务会一直是旧样式。
+    """
+    document = service.render_document(store, job_id)
+    if document is None:
         raise HTTPException(404, "报告尚未生成")
-    return HTMLResponse(path.read_text(encoding="utf-8"))
+    return HTMLResponse(document, headers={"Cache-Control": "no-cache"})
 
 
 @app.get("/api/jobs/{job_id}/download/{name}")
-def download(job_id: str, name: str) -> FileResponse:
+def download(job_id: str, name: str):
     if name not in DOWNLOADS:
         raise HTTPException(400, "不支持的文件")
-    if name == "report.html" and not store.job_path(job_id, name).exists():
-        service.rebuild_html(store, job_id)
+    filename = f"{store.job_dir(job_id).name}_{name}"
+    if name == "report.html":
+        # 下载与预览同源：同一份实时渲染，避免旧任务下到旧版式
+        document = service.render_document(store, job_id)
+        if document is None:
+            raise HTTPException(404, "报告尚未生成")
+        return Response(
+            content=document,
+            media_type="text/html; charset=utf-8",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
     path = store.job_path(job_id, f"handoff/{name}" if name in HANDOFF_FILES else name)
     if not path.exists():
         raise HTTPException(404, "文件不存在")
-    return FileResponse(path, filename=f"{store.job_dir(job_id).name}_{name}")
+    return FileResponse(path, filename=filename)
 
 
 @app.get("/", response_class=HTMLResponse)

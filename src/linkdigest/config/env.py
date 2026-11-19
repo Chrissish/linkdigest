@@ -135,3 +135,26 @@ def env_float(key: str, default: float) -> float:
     except ValueError:
         _warn(key, raw, "小数", default)
         return default
+
+
+def env_opt_int(key: str) -> int | None:
+    """可选整数：不设返回 None（=让程序自己推断），坏值告警后也回落 None。"""
+    raw = env(key)
+    if raw is None:
+        return None
+    try:
+        return int(raw)
+    except ValueError:
+        _warn(key, raw, "整数", None)
+        return None
+
+
+def env_opt_float(key: str) -> float | None:
+    raw = env(key)
+    if raw is None:
+        return None
+    try:
+        return float(raw)
+    except ValueError:
+        _warn(key, raw, "小数", None)
+        return None

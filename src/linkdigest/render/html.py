@@ -80,7 +80,6 @@ def _meta(bundle: TranscriptBundle, duration: float | None, timeline: bool) -> s
     else:
         items.append(f'<span class="chip"><b>{bundle.quality.chars}</b> 字</span>')
     items.append(f'<span class="chip">原语言 <b>{_esc(bundle.language.detected)}</b></span>')
-    items.append(f'<span class="chip">{_esc(bundle.quality.asr_engine)}</span>')
     if bundle.quality.avg_confidence is not None:
         items.append(f'<span class="chip">置信度 <b>{bundle.quality.avg_confidence:.3f}</b></span>')
     return "\n      ".join(items)
@@ -208,6 +207,14 @@ def _footer(bundle: TranscriptBundle, report: Report, extra: dict) -> str:
         stats.append(
             f"模型 {llm.get('calls')} 次 / {llm.get('prompt_tokens')}+{llm.get('completion_tokens')} tokens"
         )
+        total = extra.get("llm_total") or {}
+        if total.get("calls") and total.get("calls") != llm.get("calls"):
+            stats.append(f"累计 {total.get('calls')} 次")
+    path = extra.get("path")
+    if path == "direct":
+        stats.append("路径 直读全文")
+    elif path == "map-reduce":
+        stats.append("路径 分块汇总")
     lines.append(f"    <p>{_esc(' · '.join(stats))}</p>")
     if report.intent:
         lines.append(f'    <p class="intent-foot">给谁看 / 要回答什么：{_esc(report.intent)}</p>')

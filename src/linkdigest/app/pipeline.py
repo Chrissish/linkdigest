@@ -218,6 +218,7 @@ def run_job(store: Store, job_id: str) -> None:
                 extra={
                     "llm_stats": client.stats.as_dict(),
                     "mode": run.mode,
+                    "path": run.path,
                     "job_id": job_id,
                     "created_at": created.created_at if created else None,
                 },
@@ -226,7 +227,9 @@ def run_job(store: Store, job_id: str) -> None:
                 store.job_path(job_id, "usage.json"),
                 {
                     "llm": client.stats.as_dict(),
+                    "last": client.stats.as_dict(),
                     "mode": run.mode,
+                    "path": run.path,
                     "chunks": run.chunks,
                     "dir": final_dir,
                     "stages": [s for s in read_stages(store, job_id) if s.get("stage") != "error"],
@@ -283,14 +286,18 @@ def rerun_understand(store: Store, job_id: str) -> None:
                 extra={
                     "llm_stats": client.stats.as_dict(),
                     "mode": run.mode,
+                    "path": run.path,
                     "job_id": job_id,
                     "created_at": created.created_at if created else None,
                 },
             )
-            # 用量在上一轮基础上累加，重跑烧掉的 token 不从账本上消失
+            # 用量在上一轮基础上累加，重跑烧掉的 token 不从账本上消失；
+            # last 保留本轮明细，展示层不再把「累计」误读成单篇开销
             usage = {
                 "llm": client.stats.as_dict(),
+                "last": client.stats.as_dict(),
                 "mode": run.mode,
+                "path": run.path,
                 "chunks": run.chunks,
                 "dir": store.dir_name(store.get(job_id)),
                 "stages": [s for s in read_stages(store, job_id) if s.get("stage") != "error"],

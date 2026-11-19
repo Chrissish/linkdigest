@@ -61,8 +61,12 @@ def artifacts(store: Store, job_id: str) -> dict[str, Any]:
     return load_artifacts(store, job_id)
 
 
-def rebuild_html(store: Store, job_id: str) -> Path | None:
-    """老任务没有 report.html 时按需补一份，不动已有的 report.md。"""
+def render_document(store: Store, job_id: str) -> str | None:
+    """按当前渲染器实时产出单文件 HTML。
+
+    不读任务目录里那份 report.html：那是任务跑完时按当时模板写的，渲染器与
+    版式口径更新后老任务会一直停在旧样式。渲染很轻，每次现算即可。
+    """
     bundle_path = store.job_path(job_id, "transcript.json")
     report_path = store.job_path(job_id, "report.json")
     if not (bundle_path.exists() and report_path.exists()):
@@ -71,9 +75,23 @@ def rebuild_html(store: Store, job_id: str) -> Path | None:
     report = Report.model_validate(read_json(report_path))
     usage_path = store.job_path(job_id, "usage.json")
     usage = read_json(usage_path) if usage_path.exists() else {}
-    extra = {"llm_stats": usage.get("llm") or {}, "mode": usage.get("mode") or ""}
+    extra = {
+        # last=本轮明细，llm=累计账本（重跑会累加）；页脚要分清这两者
+        "llm_stats": usage.get("last") or usage.get("llm") or {},
+        "llm_total": usage.get("llm") or {},
+        "mode": usage.get("mode") or "",
+        "path": usage.get("path") or "",
+    }
+    return render_html(bundle, report, extra)
+
+
+def rebuild_html(store: Store, job_id: str) -> Path | None:
+    """把实时渲染结果落盘一份（供下载/归档）；渲染不了返回 None。"""
+    document = render_document(store, job_id)
+    if document is None:
+        return None
     target = store.job_path(job_id, "report.html")
-    target.write_text(render_html(bundle, report, extra), encoding="utf-8")
+    target.write_text(document, encoding="utf-8")
     return target
 
 

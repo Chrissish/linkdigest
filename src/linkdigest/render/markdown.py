@@ -51,6 +51,8 @@ def frontmatter(bundle: TranscriptBundle, report: Report, extra: dict) -> str:
         lines.append(f"author: {_yq(src.author)}")
     lines.append("type: linkdigest")
     lines.append(f"mode: {_yq(mode)}")
+    if extra.get("path"):
+        lines.append(f"path: {_yq(extra['path'])}")
     if timeline and duration:
         lines.append(f"duration: {_yq(ts(duration))}")
     else:

@@ -28,6 +28,8 @@ from .env import (
     env,
     env_float,
     env_int,
+    env_opt_float,
+    env_opt_int,
     resolve_path,
     user_data_dir,
 )
@@ -75,6 +77,13 @@ class Settings(BaseModel):
     llm_thinking: bool | None = None
     llm_price_in: float = Field(default=0.15, ge=0)
     llm_price_out: float = Field(default=0.60, ge=0)
+    # 上下文窗口（tokens）：None=按模型名从内置家族表推断（deepseek→64K、
+    # claude→200K……未知家族回落 32K 保守值）。官方 API 不暴露窗口大小，
+    # 名称也不编码，所以表 + 覆盖是能做到的全部；换不认识的模型时手填这个。
+    llm_context_tokens: int | None = Field(default=None, ge=1024)
+    # 估算字/token 比：None=按内容语种构成自动估算（CJK 与拉丁文加权）。
+    # 只用于「单次直读塞不塞得下」的预算判断，不影响计费。
+    llm_chars_per_token: float | None = Field(default=None, gt=0)
     # 理解阶段看门狗：整个 build_report 的硬上限。线程挂死（pool 丢工、锁丢失）
     # 时 httpx 的请求级超时救不了——没有任何在飞的请求可超时。到点判失败，可重试。
     understand_timeout: float = Field(default=1800.0, gt=0)
@@ -246,6 +255,8 @@ def load() -> Settings:
             llm_thinking=_env_thinking(),
             llm_price_in=env_float("LLM_PRICE_IN", 0.15),
             llm_price_out=env_float("LLM_PRICE_OUT", 0.60),
+            llm_context_tokens=env_opt_int("LLM_CONTEXT_TOKENS"),
+            llm_chars_per_token=env_opt_float("LLM_CHARS_PER_TOKEN"),
             understand_timeout=env_float("UNDERSTAND_TIMEOUT", 1800.0),
             fetch_timeout=env_float("FETCH_TIMEOUT", 30.0),
             max_download_mb=env_int("MAX_DOWNLOAD_MB", 2048),

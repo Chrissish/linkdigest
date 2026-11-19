@@ -25,11 +25,14 @@
                        │  Transcript Bundle (JSON, schema v1.0)
 ┌──────────────────────┴──────────────────────────────────────┐
 │ 智能层（可替换、可降级）                                      │
-│ understand    chunk → map(并行) → reduce → Report(JSON)       │
+│ understand    直读全文 → Report(JSON)；塞不下退 chunk → map(并行) → reduce │
 │ handoff       无密钥时导出作业单，交给外部 agent 理解         │
 │ render        Report → Markdown / HTML                        │
 └─────────────────────────────────────────────────────────────┘
 ```
+
+理解层的完整技术流——路径选择判据、上下文预算、传输自愈、两层补漏——
+单独成文：[UNDERSTANDING.md](UNDERSTANDING.md)。
 
 代码目录与依赖方向（只允许向下依赖，跨层反向 import 一律视为 bug）：
 
@@ -94,9 +97,13 @@ URL ──▶ classify ──▶ fetch ──┬─ 音视频 ──▶ ffmpeg �
                                                               ▼
                                                     normalize（规则清洗）
                                                               ▼
-                                              Transcript Bundle（落盘 + 校验）
+                                                    Transcript Bundle（落盘 + 校验）
                                                               ▼
-                                          chunk → map×N → reduce → Report
+                                          全文塞得下？──是──▶ 直读全文（1 次调用）──┐
+                                                    │否                            │
+                                                    ▼                              │
+                                          chunk → map×N → reduce ──────────────────┤
+                                                    ◀─ 直读失败也退回这里 ──────────┘
                                                               ▼
                                                     Markdown（前端渲染）
 ```
@@ -219,6 +226,14 @@ trafilatura 适配、RSS 适配、播客三级路线和十几条中文报错文�
 
 **ADR-6 契约先于实现**：先用 JSON Schema 定死 `Transcript Bundle`，再写管道。
 好处：ASR 引擎、采集器、报告器可以三人并行改造而不打架。
+
+**ADR-13 理解路径直读优先，预算闸门把关**：上下文窗口够大的现代模型可以一次通读
+全文，省去分块摘要的信息损耗与多次调用的开销（实测省 30-40% token，正文更长）。
+但「塞得下」不等于「该塞满」：输入估算过 `(窗口 − 输出预留 − 提示词预留) × 0.65`
+质量护栏才走直读，超了或失败自动退回 map-reduce。窗口从模型名家族表推断，
+未知名回落 32K 保守值。技术流详见 [UNDERSTANDING.md](UNDERSTANDING.md)。
+被否方案：一律 map-reduce（长上下文时代纯属浪费）；一律直读（超长输入注意力稀释，
+且未知窗口会把请求打进 400）。
 
 ## 失败与降级矩阵
 
